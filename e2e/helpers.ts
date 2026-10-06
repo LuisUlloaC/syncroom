@@ -23,7 +23,16 @@ export interface TestPeer {
 
 const sleep = (ms: number): Promise<void> => new Promise(done => setTimeout(done, ms))
 
-export async function startPeer(options: {code: string; name: string; direct: boolean}): Promise<TestPeer> {
+export interface PeerOptions {
+  code: string
+  name: string
+  direct: boolean
+  /** Por defecto oculto; SYNCROOM_E2E_VISIBLE=1 abre la mini ventana para depurar con las DevTools. */
+  visible?: boolean
+  extraArgs?: string[]
+}
+
+export async function startPeer(options: PeerOptions): Promise<TestPeer> {
   const browser = await locateBrowser()
   if (browser === undefined) throw new Error('e2e needs Edge, Chrome, Brave or Chromium installed')
   const profileDir = await mkdtemp(join(tmpdir(), 'syncroom-e2e-'))
@@ -40,8 +49,8 @@ export async function startPeer(options: {code: string; name: string; direct: bo
     resolve: async () => ({metas: [VIDEO], truncated: false})
   })
   session.start()
-  // SYNCROOM_E2E_VISIBLE=1 abre la mini ventana para poder depurar con las DevTools.
-  engine.start(buildEngineArgs({url: bridge.pageUrl, profileDir, visible: process.env.SYNCROOM_E2E_VISIBLE === '1'}))
+  const visible = options.visible ?? process.env.SYNCROOM_E2E_VISIBLE === '1'
+  engine.start([...buildEngineArgs({url: bridge.pageUrl, profileDir, visible}), ...(options.extraArgs ?? [])])
 
   return {
     session,

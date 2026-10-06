@@ -24,7 +24,10 @@ describe('buildEngineArgs', () => {
       '--no-default-browser-check',
       '--autoplay-policy=no-user-gesture-required',
       '--app=http://127.0.0.1:5000/?t=abc',
-      '--window-size=420,320'
+      '--window-size=420,320',
+      '--disable-features=CalculateNativeWinOcclusion',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding'
     ])
   })
 })

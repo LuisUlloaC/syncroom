@@ -8,6 +8,17 @@ export interface EngineArgsOptions {
   visible: boolean
 }
 
+/**
+ * Chromium no empieza a reproducir en una ventana que nace tapada por otra o fuera de la vista:
+ * la da por oculta y aplaza la carga del vídeo para siempre. Con esto la mini ventana cuenta como
+ * visible aunque esté tapada. Comprobado con e2e/player-window.e2e.test.ts.
+ */
+const KEEP_PLAYING_WHEN_COVERED = [
+  '--disable-features=CalculateNativeWinOcclusion',
+  '--disable-backgrounding-occluded-windows',
+  '--disable-renderer-backgrounding'
+]
+
 /** Parámetros verificados el 2026-10-06 con Edge en Windows. No añadir otros sin probarlos. */
 export function buildEngineArgs(options: EngineArgsOptions): string[] {
   const common = [
@@ -17,7 +28,7 @@ export function buildEngineArgs(options: EngineArgsOptions): string[] {
     '--autoplay-policy=no-user-gesture-required'
   ]
   return options.visible
-    ? [...common, `--app=${options.url}`, '--window-size=420,320']
+    ? [...common, `--app=${options.url}`, '--window-size=420,320', ...KEEP_PLAYING_WHEN_COVERED]
     : [...common, '--headless=new', options.url]
 }
 
