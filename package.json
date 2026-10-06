@@ -1,0 +1,41 @@
+{
+  "name": "syncroom",
+  "displayName": "SyncRoom",
+  "description": "%description%",
+  "version": "0.1.0",
+  "publisher": "luisulloac",
+  "license": "MIT",
+  "private": true,
+  "engines": { "vscode": "^1.100.0" },
+  "categories": ["Other"],
+  "keywords": ["music", "youtube", "listen together", "room", "sync"],
+  "extensionKind": ["ui"],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [],
+  "contributes": {},
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "node esbuild.mjs && vitest run --config vitest.e2e.config.ts",
+    "package": "node esbuild.mjs && vsce package --no-dependencies --allow-missing-repository"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/vscode": "1.100.0",
+    "@types/ws": "8.18.2",
+    "@types/youtube": "0.3.0",
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "0.28.2",
+    "fast-xml-parser": "5.11.2",
+    "nostr-tools": "2.25.2",
+    "preact": "11.0.0",
+    "tree-kill": "1.2.2",
+    "trystero": "0.26.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3",
+    "ws": "8.22.0"
+  }
+}
