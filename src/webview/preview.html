@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SyncRoom preview</title>
+  <style>
+    :root {
+      --vscode-font-family: 'Segoe UI', system-ui, sans-serif;
+      --vscode-font-size: 13px;
+      --vscode-editor-font-family: Consolas, 'Courier New', monospace;
+      --vscode-foreground: #cccccc;
+      --vscode-descriptionForeground: #9d9d9d;
+      --vscode-icon-foreground: #c5c5c5;
+      --vscode-focusBorder: #0078d4;
+      --vscode-button-background: #0078d4;
+      --vscode-button-foreground: #ffffff;
+      --vscode-button-hoverBackground: #026ec1;
+      --vscode-button-secondaryBackground: #313131;
+      --vscode-button-secondaryForeground: #cccccc;
+      --vscode-button-secondaryHoverBackground: #3c3c3c;
+      --vscode-toolbar-hoverBackground: rgba(90, 93, 94, 0.31);
+      --vscode-toolbar-activeBackground: rgba(99, 102, 103, 0.31);
+      --vscode-input-background: #313131;
+      --vscode-input-foreground: #cccccc;
+      --vscode-input-border: #3c3c3c;
+      --vscode-input-placeholderForeground: #989898;
+      --vscode-progressBar-background: #0078d4;
+      --vscode-panel-border: #2b2b2b;
+      --vscode-editorWidget-background: #202020;
+      --vscode-list-hoverBackground: #2a2d2e;
+      --vscode-list-inactiveSelectionBackground: #37373d;
+      --vscode-textLink-activeForeground: #4daafc;
+      --vscode-testing-iconPassed: #73c991;
+    }
+    html { background: #181818; }
+    /* Ancho típico de la barra lateral. El navegador no baja de ~500 px, así que se fija aquí. */
+    body { width: 21rem; }
+  </style>
+  <link rel="stylesheet" href="../../dist/webview/webview.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    window.__SYNCROOM_STRINGS__ = {
+      'lobby.title': 'Listen together',
+      'lobby.body': 'Create a room and share its code. Everyone in the room hears the same YouTube queue at the same time.',
+      'lobby.create': 'Create room',
+      'lobby.joinLabel': 'Have a code?',
+      'lobby.join': 'Join',
+      'room.code': 'Room code',
+      'room.copy': 'Copy room code',
+      'room.leave': 'Leave room',
+      'room.you': 'you',
+      'room.unnamed': 'Someone',
+      'room.direct': 'Connected directly',
+      'room.relayed': 'Connected through relays',
+      'room.alone': 'Waiting for others to join',
+      'room.starting': 'Starting the audio engine…',
+      'player.nothing': 'Nothing playing',
+      'player.hint': 'Paste a YouTube link below to start.',
+      'player.play': 'Play',
+      'player.pause': 'Pause',
+      'player.next': 'Next',
+      'player.seek': 'Position',
+      'player.volume': 'Volume',
+      'player.show': 'Show player window',
+      'player.hide': 'Hide player window',
+      'player.unplayable': 'This video is not available for you.',
+      'add.placeholder': 'YouTube video or playlist link',
+      'add.button': 'Add',
+      'queue.title': 'Queue',
+      'queue.empty': 'The queue is empty.',
+      'queue.playNow': 'Play now',
+      'queue.remove': 'Remove from queue',
+      'queue.addedBy': 'added by {0}',
+      'queue.unplayable': 'not available for you'
+    }
+    const track = (n, videoId, title, author, addedBy, extra) =>
+      Object.assign({id: 'p:' + n, videoId, title, author, addedBy, current: false, unplayable: false}, extra)
+
+    const room = {
+      code: 'KQ7MX2PA',
+      me: {id: 'me', name: 'Luis'},
+      peers: [{id: 'me', name: 'Luis'}, {id: 'a', name: 'Dayana'}, {id: 'b', name: ''}],
+      tracks: [
+        track(1, 'M7lc1UVf-VE', 'YouTube Developers Live: Embedded Web Player Customization', 'Google for Developers', 'Luis', {current: true}),
+        track(2, 'jNQXAC9IVRw', 'Me at the zoo', 'jawed', 'Dayana'),
+        track(3, 'dQw4w9WgXcQ', 'A very long title that should be cut with an ellipsis instead of wrapping onto a second line', 'Somebody', 'Luis'),
+        track(4, 'aaaaaaaaaaa', 'Blocked in your country', 'Label', 'Dayana', {unplayable: true})
+      ],
+      playback: {trackId: 'p:1', playing: true, positionS: 84, durationS: 1344},
+      engineReady: true,
+      net: {directPeers: 1, relaysOk: 4},
+      volume: 60
+    }
+
+    const wanted = new URLSearchParams(location.search).get('state')
+    const state = wanted === 'lobby' ? {inRoom: false} : {inRoom: true, room, playerVisible: false}
+    // Igual que el host real: responde con el estado cuando la vista dice «ready».
+    window.acquireVsCodeApi = () => ({
+      postMessage: message => {
+        console.log('to host', message)
+        if (message.t === 'ready') window.postMessage({t: 'state', state}, '*')
+      }
+    })
+  </script>
+  <script src="../../dist/webview/webview.js"></script>
+</body>
+</html>
