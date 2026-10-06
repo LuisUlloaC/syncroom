@@ -16,6 +16,8 @@ export interface SessionOptions {
   link: EngineLink
   resolve: (input: string) => Promise<ResolvedLink>
   now?: () => number
+  /** Cuánto se espera al «ready» del motor tras lanzarlo. */
+  readyTimeoutMs?: number
 }
 
 export interface TrackView {
@@ -48,6 +50,7 @@ const PEER_TIMEOUT_MS = 35_000
 const TIGHT_TOLERANCE_S = 0.75
 const DRIFT_TOLERANCE_S = 2
 const LOAD_GRACE_MS = 1500
+const DEFAULT_READY_TIMEOUT_MS = 20_000
 /** Códigos del IFrame API: parámetro inválido, error HTML5, no existe, incrustación prohibida (x2). */
 const UNPLAYABLE_CODES = new Set([2, 5, 100, 101, 150])
 
@@ -57,6 +60,9 @@ export class RoomSession {
   private readonly state: RoomState
   private readonly now: () => number
   private readonly listeners = new Set<() => void>()
+  private readonly failureListeners = new Set<() => void>()
+  private readyTimer: ReturnType<typeof setTimeout> | undefined
+  private unsubscribeDrop: (() => void) | undefined
   private readonly unplayable = new Set<string>()
   private status: PlayerStatus | undefined
   private engineReady = false
@@ -77,12 +83,31 @@ export class RoomSession {
 
   start(): void {
     this.unsubscribe = this.opts.link.onMessage(msg => this.onEngine(msg))
+    this.unsubscribeDrop = this.opts.link.onDisconnect?.(() => {
+      if (this.engineReady) this.engineFailed()
+    })
     this.timer = setInterval(() => this.tick(), TICK_MS)
+  }
+
+  /** Llamar justo después de lanzar el motor: si no dice «ready» a tiempo, se da por caído. */
+  expectEngine(): void {
+    this.clearReadyTimer()
+    this.readyTimer = setTimeout(() => this.engineFailed(), this.opts.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS)
+  }
+
+  onEngineFailure(listener: () => void): () => void {
+    this.failureListeners.add(listener)
+    return () => {
+      this.failureListeners.delete(listener)
+    }
   }
 
   dispose(): void {
     if (this.timer !== undefined) clearInterval(this.timer)
     this.timer = undefined
+    this.clearReadyTimer()
+    this.unsubscribeDrop?.()
+    this.unsubscribeDrop = undefined
     if (this.engineReady) {
       this.sendAll(this.state.leave())
       this.opts.link.send({t: 'leave'})
@@ -176,6 +201,7 @@ export class RoomSession {
     switch (msg.t) {
       case 'ready':
         // También llega tras reiniciar el motor: la página nueva no tiene nada cargado.
+        this.clearReadyTimer()
         this.engineReady = true
         this.status = NOTHING_LOADED
         this.loadGraceUntil = 0
@@ -188,11 +214,17 @@ export class RoomSession {
       case 'msg':
         if (isRoomMessage(msg.msg)) this.sendAll(this.state.receive(msg.msg, msg.via))
         break
-      case 'status':
+      case 'status': {
         if (this.now() < this.loadGraceUntil && msg.status.videoId !== this.status?.videoId) break
+        const before = this.status
         this.status = msg.status
+        // Un cambio de estado real (p. ej. acaba de cargar) se corrige al momento, no en el próximo tick.
+        if (before === undefined || before.state !== msg.status.state || before.videoId !== msg.status.videoId) {
+          this.reconcileNow(TIGHT_TOLERANCE_S)
+        }
         this.emit()
         break
+      }
       case 'ended': {
         const current = this.state.currentTrack()
         if (current !== undefined && current.videoId === msg.videoId) this.sendAll(this.state.trackEnded(current.id))
@@ -267,6 +299,19 @@ export class RoomSession {
           break
       }
     }
+  }
+
+  private engineFailed(): void {
+    this.clearReadyTimer()
+    this.engineReady = false
+    this.status = undefined
+    this.emit()
+    for (const listener of this.failureListeners) listener()
+  }
+
+  private clearReadyTimer(): void {
+    if (this.readyTimer !== undefined) clearTimeout(this.readyTimer)
+    this.readyTimer = undefined
   }
 
   private sendAll(outgoing: Outgoing[]): void {

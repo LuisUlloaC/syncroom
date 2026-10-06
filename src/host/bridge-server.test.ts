@@ -154,6 +154,18 @@ describe('BridgeServer websocket', () => {
     await expect(connect(`/other?t=${token}`)).rejects.toThrow()
   })
 
+  it('notifies when the client goes away, but not when it is replaced', async () => {
+    const drops: number[] = []
+    bridge.onDisconnect(() => drops.push(Date.now()))
+    const first = await connect(`/ws?t=${token}`)
+    const second = await connect(`/ws?t=${token}`)
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(drops).toHaveLength(0)
+    second.close()
+    await expect.poll(() => drops.length).toBe(1)
+    expect(first.readyState).not.toBe(first.OPEN)
+  })
+
   it('a new connection replaces the previous one', async () => {
     const first = await connect(`/ws?t=${token}`)
     const firstClosed = closed(first)

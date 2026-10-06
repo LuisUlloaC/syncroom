@@ -23,6 +23,7 @@ export interface BridgeOptions {
 export class BridgeServer implements EngineLink {
   private socket: WebSocket | undefined
   private readonly listeners = new Set<(msg: EngineToHost) => void>()
+  private readonly dropListeners = new Set<() => void>()
 
   private constructor(
     private readonly http: Server,
@@ -63,6 +64,13 @@ export class BridgeServer implements EngineLink {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)
+    }
+  }
+
+  onDisconnect(listener: () => void): () => void {
+    this.dropListeners.add(listener)
+    return () => {
+      this.dropListeners.delete(listener)
     }
   }
 
@@ -152,7 +160,9 @@ export class BridgeServer implements EngineLink {
       for (const listener of this.listeners) listener(msg)
     })
     ws.on('close', () => {
-      if (this.socket === ws) this.socket = undefined
+      if (this.socket !== ws) return
+      this.socket = undefined
+      for (const listener of this.dropListeners) listener()
     })
     ws.on('error', () => ws.terminate())
   }

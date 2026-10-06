@@ -21,6 +21,16 @@ class FakeLink implements EngineLink {
   emit(msg: EngineToHost): void {
     this.listener?.(msg)
   }
+  private lost: (() => void) | undefined
+  onDisconnect(listener: () => void): () => void {
+    this.lost = listener
+    return () => {
+      this.lost = undefined
+    }
+  }
+  drop(): void {
+    this.lost?.()
+  }
   take(): HostToEngine[] {
     const sent = this.sent
     this.sent = []
@@ -221,7 +231,64 @@ describe('queue and playback', () => {
   })
 })
 
+describe('engine watchdog', () => {
+  it('reports a failure when the engine never says ready', () => {
+    const {session} = setup()
+    const failed = vi.fn()
+    session.onEngineFailure(failed)
+    session.expectEngine()
+    vi.advanceTimersByTime(19_000)
+    expect(failed).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(2000)
+    expect(failed).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not complain when ready arrives in time', () => {
+    const {link, session} = setup()
+    const failed = vi.fn()
+    session.onEngineFailure(failed)
+    session.expectEngine()
+    vi.advanceTimersByTime(5000)
+    link.emit({t: 'ready'})
+    vi.advanceTimersByTime(60_000)
+    expect(failed).not.toHaveBeenCalled()
+  })
+
+  it('reports a failure and stops talking when the link drops after ready', () => {
+    const {link, session} = setup()
+    const failed = vi.fn()
+    session.onEngineFailure(failed)
+    session.expectEngine()
+    link.emit({t: 'ready'})
+    link.take()
+    link.drop()
+    expect(failed).toHaveBeenCalledTimes(1)
+    expect(session.view().engineReady).toBe(false)
+    session.togglePlay()
+    vi.advanceTimersByTime(10_000)
+    expect(link.take()).toEqual([])
+  })
+
+  it('ignores a drop while nothing was ready', () => {
+    const {link, session} = setup()
+    const failed = vi.fn()
+    session.onEngineFailure(failed)
+    link.drop()
+    expect(failed).not.toHaveBeenCalled()
+  })
+})
+
 describe('drift', () => {
+  it('reconciles as soon as the player reports a change of state', async () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    await session.addLink('x')
+    session.togglePlay()
+    link.take()
+    link.emit({t: 'status', status: playing('aaaaaaaaaaa', 0.5)})
+    expect(commands(link.take())).toEqual([{type: 'pause'}])
+  })
+
   it('corrects drift on the periodic check but tolerates small differences', async () => {
     const {link, session} = setup()
     link.emit({t: 'ready'})

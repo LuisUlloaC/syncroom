@@ -21,4 +21,6 @@ export type EngineToHost =
 export interface EngineLink {
   send(msg: HostToEngine): void
   onMessage(listener: (msg: EngineToHost) => void): () => void
+  /** La página del motor cerró el canal sin que se lo pidiéramos. */
+  onDisconnect?(listener: () => void): () => void
 }
