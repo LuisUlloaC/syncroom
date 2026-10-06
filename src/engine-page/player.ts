@@ -10,9 +10,11 @@ const STATES: Record<number, PlayerState> = {
 }
 
 const STATUS_INTERVAL_MS = 1000
+const API_TIMEOUT_MS = 30_000
 
 function loadApi(): Promise<void> {
   return new Promise((resolve, reject) => {
+    setTimeout(() => reject(new Error('YouTube IFrame API did not load in time')), API_TIMEOUT_MS)
     const host = window as Window & {onYouTubeIframeAPIReady?: () => void}
     host.onYouTubeIframeAPIReady = () => resolve()
     const tag = document.createElement('script')
@@ -36,7 +38,8 @@ export class Player {
   static async create(elementId: string): Promise<Player> {
     await loadApi()
     let player: Player | undefined
-    const yt = await new Promise<YT.Player>(resolve => {
+    const yt = await new Promise<YT.Player>((resolve, reject) => {
+      setTimeout(() => reject(new Error('YouTube player did not become ready in time')), API_TIMEOUT_MS)
       const instance = new YT.Player(elementId, {
         width: '100%',
         height: '100%',

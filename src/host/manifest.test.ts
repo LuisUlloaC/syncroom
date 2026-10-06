@@ -80,7 +80,7 @@ describe('manifest', () => {
   it('registers every contributed command', () => {
     const declared = manifest.contributes.commands.map(c => c.command).sort()
     const registered = [...hostSource.matchAll(/'(syncroom\.[A-Za-z]+)':/g)].map(m => m[1] ?? '').sort()
-    expect(declared).toHaveLength(8)
+    expect(declared).toHaveLength(9)
     expect(registered).toEqual(declared)
   })
 

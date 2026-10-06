@@ -8,6 +8,7 @@
   "command.next": "Siguiente pista",
   "command.togglePlayer": "Mostrar u ocultar la ventana del reproductor",
   "command.copyCode": "Copiar código de sala",
+  "command.showLog": "Mostrar registro",
   "view.name": "Sala",
   "config.displayName": "Nombre que ven las demás personas de la sala. Si está vacío, SyncRoom lo pregunta la primera vez.",
   "config.browserPath": "Ruta completa de un navegador basado en Chromium (Edge, Chrome, Brave, Chromium) que se usa para reproducir el audio. Déjalo vacío para buscarlo automáticamente.",

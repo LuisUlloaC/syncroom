@@ -18,6 +18,8 @@ export interface SessionOptions {
   now?: () => number
   /** Cuánto se espera al «ready» del motor tras lanzarlo. */
   readyTimeoutMs?: number
+  /** Registro de diagnóstico (canal de salida de VS Code). */
+  log?: (text: string) => void
 }
 
 export interface TrackView {
@@ -37,6 +39,8 @@ export interface RoomView {
   tracks: TrackView[]
   playback: {trackId: string | null; playing: boolean; positionS: number; durationS: number}
   engineReady: boolean
+  /** Código del fallo que impide reproducir aunque el motor esté en marcha. */
+  fault: string | undefined
   net: {directPeers: number; relaysOk: number}
   volume: number
 }
@@ -66,6 +70,7 @@ export class RoomSession {
   private readonly unplayable = new Set<string>()
   private status: PlayerStatus | undefined
   private engineReady = false
+  private fault: string | undefined
   private net = {directPeers: 0, relaysOk: 0}
   private volume: number
   private ticks = 0
@@ -91,6 +96,8 @@ export class RoomSession {
 
   /** Llamar justo después de lanzar el motor: si no dice «ready» a tiempo, se da por caído. */
   expectEngine(): void {
+    this.log('waiting for the engine to say ready')
+    this.fault = undefined
     this.clearReadyTimer()
     this.readyTimer = setTimeout(() => this.engineFailed(), this.opts.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS)
   }
@@ -144,6 +151,7 @@ export class RoomSession {
         durationS
       },
       engineReady: this.engineReady,
+      fault: this.fault,
       net: this.net,
       volume: this.volume
     }
@@ -202,6 +210,7 @@ export class RoomSession {
       case 'ready':
         // También llega tras reiniciar el motor: la página nueva no tiene nada cargado.
         this.clearReadyTimer()
+        this.log('engine ready')
         this.engineReady = true
         this.status = NOTHING_LOADED
         this.loadGraceUntil = 0
@@ -231,6 +240,7 @@ export class RoomSession {
         break
       }
       case 'error': {
+        this.log(`player error ${msg.code} on ${msg.videoId ?? 'nothing'}`)
         const current = this.state.currentTrack()
         if (current !== undefined && current.videoId === msg.videoId && UNPLAYABLE_CODES.has(msg.code)) {
           this.unplayable.add(current.id)
@@ -241,6 +251,14 @@ export class RoomSession {
       }
       case 'net':
         this.net = {directPeers: msg.directPeers, relaysOk: msg.relaysOk}
+        this.emit()
+        break
+      case 'log':
+        this.log(`engine: ${msg.text}`)
+        break
+      case 'fault':
+        this.fault = msg.code
+        this.log(`engine fault: ${msg.code}`)
         this.emit()
         break
     }
@@ -302,11 +320,17 @@ export class RoomSession {
   }
 
   private engineFailed(): void {
+    this.log(this.engineReady ? 'engine link lost' : 'engine never said ready')
     this.clearReadyTimer()
     this.engineReady = false
+    this.fault = undefined
     this.status = undefined
     this.emit()
     for (const listener of this.failureListeners) listener()
+  }
+
+  private log(text: string): void {
+    this.opts.log?.(text)
   }
 
   private clearReadyTimer(): void {

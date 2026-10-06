@@ -22,7 +22,8 @@
       {"command": "syncroom.togglePlay", "title": "%command.togglePlay%", "category": "SyncRoom"},
       {"command": "syncroom.next", "title": "%command.next%", "category": "SyncRoom"},
       {"command": "syncroom.togglePlayer", "title": "%command.togglePlayer%", "category": "SyncRoom"},
-      {"command": "syncroom.copyCode", "title": "%command.copyCode%", "category": "SyncRoom"}
+      {"command": "syncroom.copyCode", "title": "%command.copyCode%", "category": "SyncRoom"},
+      {"command": "syncroom.showLog", "title": "%command.showLog%", "category": "SyncRoom"}
     ],
     "menus": {
       "commandPalette": [

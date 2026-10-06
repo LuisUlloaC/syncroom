@@ -17,6 +17,10 @@ export type EngineToHost =
   | {t: 'ended'; videoId: string}
   | {t: 'error'; videoId: string | null; code: number}
   | {t: 'net'; directPeers: number; relaysOk: number}
+  /** Texto para el registro de diagnóstico. */
+  | {t: 'log'; text: string}
+  /** El motor funciona pero sin reproductor: YouTube no cargó. */
+  | {t: 'fault'; code: 'youtube-unreachable'}
 
 export interface EngineLink {
   send(msg: HostToEngine): void

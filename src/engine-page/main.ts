@@ -9,11 +9,26 @@ import {Player} from './player'
 async function main(): Promise<void> {
   const token = new URLSearchParams(location.search).get('t') ?? ''
   const link = new HostLink(`ws://${location.host}/ws?t=${encodeURIComponent(token)}`)
-  const player = await Player.create('player')
 
   let transport: Transport | undefined
   const net = {directPeers: 0, relaysOk: 0}
   const reportNet = (): void => link.send({t: 'net', directPeers: net.directPeers, relaysOk: net.relaysOk})
+
+  link.onLost = () => {
+    leaveRoom()
+    window.close()
+  }
+  // Primero el canal con VS Code: así hay registro aunque YouTube no cargue.
+  await link.open()
+  link.send({t: 'log', text: `page loaded in ${navigator.userAgent}`})
+  let player: Player | undefined
+  try {
+    player = await Player.create('player')
+    link.send({t: 'log', text: 'YouTube player ready'})
+  } catch (error) {
+    link.send({t: 'log', text: `YouTube player failed: ${String(error)}`})
+    link.send({t: 'fault', code: 'youtube-unreachable'})
+  }
 
   const leaveRoom = (): void => {
     transport?.close()
@@ -55,30 +70,25 @@ async function main(): Promise<void> {
         transport?.send(msg.msg, msg.relay)
         break
       case 'player':
-        player.apply(msg.cmd)
+        player?.apply(msg.cmd)
         break
       case 'volume':
-        player.setVolume(msg.value)
+        player?.setVolume(msg.value)
         break
     }
   }
 
-  player.onStatus = status => link.send({t: 'status', status})
-  player.onEnded = videoId => link.send({t: 'ended', videoId})
-  player.onError = (videoId, code) => link.send({t: 'error', videoId, code})
+  if (player !== undefined) {
+    player.onStatus = status => link.send({t: 'status', status})
+    player.onEnded = videoId => link.send({t: 'ended', videoId})
+    player.onError = (videoId, code) => link.send({t: 'error', videoId, code})
+  }
 
   // En serie: «join» deriva claves de forma asíncrona y los «send» que vienen detrás deben esperar.
   let chain: Promise<void> = Promise.resolve()
   link.onMessage = msg => {
     chain = chain.then(() => handle(msg)).catch(error => console.error('syncroom engine', error))
   }
-  link.onLost = () => {
-    player.apply({type: 'stop'})
-    leaveRoom()
-    window.close()
-  }
-
-  await link.open()
   link.send({t: 'ready'})
 }
 

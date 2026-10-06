@@ -83,7 +83,9 @@ function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
           {room.me.name} ({s('room.you')})
           {others.map(peer => `, ${peer.name === '' ? s('room.unnamed') : peer.name}`)}
         </span>
-        <span class={room.net.directPeers > 0 ? 'link direct' : 'link'}>{room.engineReady ? link : s('room.starting')}</span>
+        <span class={room.net.directPeers > 0 ? 'link direct' : 'link'}>
+          {!room.engineReady ? s('room.starting') : room.fault !== undefined ? s('room.fault') : link}
+        </span>
       </p>
 
       <section class="now">

@@ -31,6 +31,7 @@ interface ActiveRoom {
   /** true mientras se está relanzando tras un fallo. */
   restarting: boolean
   restarts: number[]
+  reportedFault: string | undefined
 }
 
 /** Ciclo de vida de la sala dentro de VS Code: como mucho una sala por ventana. */
@@ -39,6 +40,7 @@ export class RoomController implements vscode.Disposable {
   private busy = false
   private readonly changed = new vscode.EventEmitter<void>()
   readonly onDidChange = this.changed.event
+  private readonly output = vscode.window.createOutputChannel('SyncRoom')
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -69,6 +71,7 @@ export class RoomController implements vscode.Disposable {
     if (room === undefined) return
     this.active = undefined
     room.expectedExit = true
+    this.log('leaving the room')
     room.session.dispose()
     await new Promise(done => setTimeout(done, GOODBYE_MS))
     await room.engine.stop()
@@ -104,15 +107,25 @@ export class RoomController implements vscode.Disposable {
     void this.context.globalState.update('volume', session.view().volume)
   }
 
+  showLog(): void {
+    this.output.show(true)
+  }
+
   dispose(): void {
     void this.leave()
     this.changed.dispose()
+    this.output.dispose()
+  }
+
+  private log(text: string): void {
+    this.output.appendLine(`${new Date().toISOString().slice(11, 19)} ${text}`)
   }
 
   private async open(code: string): Promise<void> {
     const config = vscode.workspace.getConfiguration('syncroom')
     const configured = config.get<string>('browserPath', '').trim()
     const browser = await locateBrowser({configured})
+    this.log(`room ${code}: browser ${browser ?? 'NOT FOUND'}${configured !== '' ? ' (configured)' : ''}`)
     if (browser === undefined) {
       await this.reportMissingBrowser(configured !== '')
       return
@@ -132,7 +145,8 @@ export class RoomController implements vscode.Disposable {
       relays: config.get<string[]>('relays', DEFAULT_RELAYS),
       volume: this.context.globalState.get<number>('volume', DEFAULT_VOLUME),
       link: bridge,
-      resolve: input => resolveLink(input)
+      resolve: input => resolveLink(input),
+      log: text => this.log(text)
     })
     const room: ActiveRoom = {
       session,
@@ -142,11 +156,23 @@ export class RoomController implements vscode.Disposable {
       visible: false,
       expectedExit: false,
       restarting: false,
-      restarts: []
+      restarts: [],
+      reportedFault: undefined
     }
     this.active = room
-    session.onChange(() => this.changed.fire())
-    room.engine.onExit(() => void this.onEngineTrouble(room))
+    session.onChange(() => {
+      const fault = session.view().fault
+      if (fault !== undefined && fault !== room.reportedFault) {
+        room.reportedFault = fault
+        this.log(`fault reported: ${fault}`)
+        void vscode.window.showWarningMessage(t('SyncRoom could not load the YouTube player. Check that youtube.com is reachable from this computer, then run "SyncRoom: Show Log".'))
+      }
+      this.changed.fire()
+    })
+    room.engine.onExit(() => {
+      this.log(`engine process exited${room.expectedExit ? ' (expected)' : ''}`)
+      void this.onEngineTrouble(room)
+    })
     session.onEngineFailure(() => void this.onEngineTrouble(room))
     session.start()
     this.launch(room)
@@ -155,7 +181,9 @@ export class RoomController implements vscode.Disposable {
   }
 
   private launch(room: ActiveRoom): void {
-    room.engine.start(buildEngineArgs({url: room.bridge.pageUrl, profileDir: room.profileDir, visible: room.visible}))
+    const args = buildEngineArgs({url: room.bridge.pageUrl, profileDir: room.profileDir, visible: room.visible})
+    this.log(`launching engine (${room.visible ? 'window' : 'hidden'}): ${args.map(a => a.replace(/t=[0-9a-f]+/, 't=…')).join(' ')}`)
+    room.engine.start(args)
     room.session.expectEngine()
   }
 
@@ -170,7 +198,9 @@ export class RoomController implements vscode.Disposable {
     try {
       const now = Date.now()
       room.restarts = [...room.restarts.filter(at => now - at < RESTART_WINDOW_MS), now]
+      this.log(`engine trouble: restart ${room.restarts.length}/${MAX_RESTARTS}`)
       if (room.restarts.length > MAX_RESTARTS) {
+        this.log('giving up: leaving the room')
         void vscode.window.showErrorMessage(t('The audio engine keeps failing. Check that YouTube is reachable, then try again.'))
         await this.leave()
         return

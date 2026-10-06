@@ -231,6 +231,29 @@ describe('queue and playback', () => {
   })
 })
 
+describe('engine diagnostics', () => {
+  it('forwards engine log lines and records a fault in the view', () => {
+    const lines: string[] = []
+    const {link, session} = setup({log: text => lines.push(text)})
+    link.emit({t: 'log', text: 'page loaded'})
+    link.emit({t: 'fault', code: 'youtube-unreachable'})
+    link.emit({t: 'ready'})
+    expect(lines.some(l => l.includes('page loaded'))).toBe(true)
+    expect(lines.some(l => l.includes('youtube-unreachable'))).toBe(true)
+    expect(session.view().fault).toBe('youtube-unreachable')
+    expect(session.view().engineReady).toBe(true)
+  })
+
+  it('clears the fault when a new engine comes up healthy', () => {
+    const {link, session} = setup()
+    link.emit({t: 'fault', code: 'youtube-unreachable'})
+    link.emit({t: 'ready'})
+    link.drop()
+    link.emit({t: 'ready'})
+    expect(session.view().fault).toBeUndefined()
+  })
+})
+
 describe('engine watchdog', () => {
   it('reports a failure when the engine never says ready', () => {
     const {session} = setup()

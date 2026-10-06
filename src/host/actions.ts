@@ -98,6 +98,10 @@ export class Actions {
     await this.controller.togglePlayer()
   }
 
+  showLog(): void {
+    this.controller.showLog()
+  }
+
   async copyCode(): Promise<void> {
     const state = this.controller.viewState()
     if (!state.inRoom) return
@@ -116,7 +120,8 @@ export function registerCommands(actions: Actions): vscode.Disposable[] {
     'syncroom.togglePlay': () => actions.togglePlay(),
     'syncroom.next': () => actions.next(),
     'syncroom.togglePlayer': () => actions.togglePlayer(),
-    'syncroom.copyCode': () => actions.copyCode()
+    'syncroom.copyCode': () => actions.copyCode(),
+    'syncroom.showLog': () => actions.showLog()
   }
   return Object.entries(handlers).map(([command, handler]) => vscode.commands.registerCommand(command, handler))
 }

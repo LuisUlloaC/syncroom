@@ -19,6 +19,7 @@ export function webviewStrings(): Record<string, string> {
     'room.relayed': t('Connected through relays'),
     'room.alone': t('Waiting for others to join'),
     'room.starting': t('Starting the audio engine…'),
+    'room.fault': t('YouTube could not be loaded in the audio engine. Check your connection.'),
     'player.nothing': t('Nothing playing'),
     'player.hint': t('Paste a YouTube link below to start.'),
     'player.play': t('Play'),
