@@ -44,7 +44,9 @@ export class EngineProcess {
 
   start(args: string[]): void {
     if (this.child !== undefined) throw new Error('engine already running')
-    const child = spawn(this.command, args, {stdio: 'ignore', windowsHide: true})
+    // Sin `windowsHide`: en Windows esa opción crea la ventana del navegador oculta, y la mini
+    // ventana ni se ve ni reproduce (e2e/player-window.e2e.test.ts). El modo oculto no abre ventana.
+    const child = spawn(this.command, args, {stdio: 'ignore'})
     this.child = child
     const finished = (): void => {
       if (this.child !== child) return

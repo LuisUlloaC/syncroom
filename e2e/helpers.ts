@@ -18,6 +18,7 @@ export const VIDEO: VideoMeta = {
 
 export interface TestPeer {
   session: RoomSession
+  profileDir: string
   stop(): Promise<void>
 }
 
@@ -54,6 +55,7 @@ export async function startPeer(options: PeerOptions): Promise<TestPeer> {
 
   return {
     session,
+    profileDir,
     async stop() {
       session.dispose()
       await sleep(300)
