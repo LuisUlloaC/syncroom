@@ -1,0 +1,16 @@
+{
+  "description": "Escucha YouTube en grupo: crea una sala, comparte el código y todos oyen la misma cola sincronizada.",
+  "command.createRoom": "Crear sala",
+  "command.joinRoom": "Unirse a una sala…",
+  "command.leaveRoom": "Salir de la sala",
+  "command.addLink": "Añadir enlace de YouTube…",
+  "command.togglePlay": "Reproducir / Pausar",
+  "command.next": "Siguiente pista",
+  "command.togglePlayer": "Mostrar u ocultar la ventana del reproductor",
+  "command.copyCode": "Copiar código de sala",
+  "view.name": "Sala",
+  "config.displayName": "Nombre que ven las demás personas de la sala. Si está vacío, SyncRoom lo pregunta la primera vez.",
+  "config.browserPath": "Ruta completa de un navegador basado en Chromium (Edge, Chrome, Brave, Chromium) que se usa para reproducir el audio. Déjalo vacío para buscarlo automáticamente.",
+  "config.directConnections": "Conectar directamente con las demás personas de la sala (WebRTC). Es más rápido, pero pueden ver tu dirección IP. Desactívalo para usar solo relays.",
+  "config.relays": "Relays de Nostr que se usan cuando no es posible la conexión directa. Los mensajes van cifrados con una clave derivada del código de sala."
+}
