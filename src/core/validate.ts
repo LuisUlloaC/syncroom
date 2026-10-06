@@ -1,3 +1,4 @@
+import {MAX_COUNTER} from './stamp'
 import type {PlaybackWire, RoomMessage, Stamp, Track} from './types'
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
@@ -5,7 +6,7 @@ const MAX_ID = 64
 const MAX_NAME = 40
 const MAX_TITLE = 300
 const MAX_TRACKS = 500
-const MAX_REMOVED = 5000
+export const MAX_REMOVED = 5000
 const MAX_POSITION_S = 24 * 60 * 60
 const MAX_AGE_MS = 24 * 60 * 60 * 1000
 
@@ -28,7 +29,7 @@ function isNumberIn(value: unknown, min: number, max: number): value is number {
 }
 
 function isStamp(value: unknown): value is Stamp {
-  return isDict(value) && Number.isSafeInteger(value.counter) && (value.counter as number) >= 0 && isText(value.peerId, MAX_ID)
+  return isDict(value) && isNumberIn(value.counter, 0, MAX_COUNTER) && Number.isInteger(value.counter) && isText(value.peerId, MAX_ID)
 }
 
 function isTrack(value: unknown): value is Track {

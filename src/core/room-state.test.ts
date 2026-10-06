@@ -1,5 +1,6 @@
 import {describe, expect, it, vi} from 'vitest'
 import {MAX_QUEUE, RELAY_TRANSIT_MS, RoomState} from './room-state'
+import {MAX_REMOVED, isRoomMessage} from './validate'
 import type {Outgoing, VideoMeta} from './types'
 
 const meta = (n: number): VideoMeta => ({
@@ -255,6 +256,33 @@ describe('convergence', () => {
     for (const o of reply) b.receive(o.msg, 'direct')
     expect(b.digest()).toBe(a.digest())
     expect(b.queue()).toHaveLength(1)
+  })
+})
+
+describe('hostile input', () => {
+  it('keeps only the known fields of incoming tracks and playback', () => {
+    const clock = {t: 1000}
+    const a = peer('a', clock)
+    const junk = 'x'.repeat(1000)
+    const track = {id: 'z:1', videoId: meta(1).videoId, title: 'T', author: 'A', addedBy: 'Z', order: {counter: 1, peerId: 'z', junk}, junk}
+    a.receive({type: 'add', from: 'z', tracks: [track]} as never, 'relay')
+    a.receive({type: 'playback', from: 'z', playback: {trackId: 'z:1', playing: true, positionS: 0, ageMs: 0, stamp: {counter: 2, peerId: 'z', junk}, junk}} as never, 'relay')
+    const state = JSON.stringify(a.receive({type: 'hello', from: 'b', name: 'B', digest: 'nope'}, 'relay'))
+    expect(state).not.toContain(junk)
+    expect(Object.keys(a.queue()[0] ?? {}).sort()).toEqual(['addedBy', 'author', 'id', 'order', 'title', 'videoId'])
+  })
+
+  it('caps tombstones for tracks it never saw, so its own state stays valid', () => {
+    const clock = {t: 1000}
+    const a = peer('a', clock)
+    for (let i = 0; i < MAX_REMOVED + 500; i++) a.receive({type: 'remove', from: 'z', trackId: `ghost:${i}`}, 'relay')
+    a.addTracks([meta(1)])
+    const known = a.queue()[0]?.id ?? ''
+    a.receive({type: 'remove', from: 'z', trackId: known}, 'relay')
+    expect(a.queue()).toHaveLength(0)
+    const [reply] = a.receive({type: 'hello', from: 'b', name: 'B', digest: 'nope'}, 'relay')
+    expect(reply?.msg.type).toBe('state')
+    expect(isRoomMessage(reply?.msg)).toBe(true)
   })
 })
 

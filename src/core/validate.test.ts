@@ -46,6 +46,8 @@ describe('isRoomMessage', () => {
     ['add with huge title', {type: 'add', from: 'a', tracks: [{...track, title: 'x'.repeat(301)}]}],
     ['add with too many tracks', {type: 'add', from: 'a', tracks: Array.from({length: 501}, () => track)}],
     ['add with non-array tracks', {type: 'add', from: 'a', tracks: 'nope'}],
+    ['track with an absurd counter', {type: 'add', from: 'a', tracks: [{...track, order: {counter: 2 ** 41, peerId: 'a'}}]}],
+    ['playback with an absurd counter', {type: 'playback', from: 'a', playback: {...wire, stamp: {counter: Number.MAX_SAFE_INTEGER, peerId: 'a'}}}],
     ['track with float counter', {type: 'add', from: 'a', tracks: [{...track, order: {counter: 1.5, peerId: 'a'}}]}],
     ['track with negative counter', {type: 'add', from: 'a', tracks: [{...track, order: {counter: -1, peerId: 'a'}}]}],
     ['remove without id', {type: 'remove', from: 'a'}],

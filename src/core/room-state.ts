@@ -1,5 +1,6 @@
 import {fnv1a} from './hash'
 import {LamportClock, ZERO_STAMP, compareStamps} from './stamp'
+import {MAX_REMOVED} from './validate'
 import type {Outgoing, Peer, PeerId, Playback, PlaybackWire, RoomMessage, Track, Via, VideoMeta} from './types'
 
 export const RELAY_TRANSIT_MS = 250
@@ -206,14 +207,14 @@ export class RoomState {
       case 'state':
         this.peers.set(msg.from, {name: msg.name, seenAt: now})
         this.mergeTracks(msg.tracks)
-        for (const id of msg.removed) this.removed.add(id)
+        for (const id of msg.removed) this.tombstone(id)
         this.applyPlayback(msg.playback, this.transit(msg.from, via))
         break
       case 'add':
         this.mergeTracks(msg.tracks)
         break
       case 'remove':
-        this.removed.add(msg.trackId)
+        this.tombstone(msg.trackId)
         break
       case 'playback':
         this.applyPlayback(msg.playback, this.transit(msg.from, via))
@@ -259,7 +260,7 @@ export class RoomState {
       from: this.opts.peerId,
       name: this.opts.name,
       tracks: this.queue(),
-      removed: [...this.removed],
+      removed: [...this.removed].slice(0, MAX_REMOVED),
       playback: this.toWire()
     }
   }
@@ -289,7 +290,7 @@ export class RoomState {
       playing: wire.playing,
       positionS: wire.positionS,
       anchorAt: this.opts.now() - (wire.playing ? wire.ageMs + transitMs : 0),
-      stamp: wire.stamp
+      stamp: {counter: wire.stamp.counter, peerId: wire.stamp.peerId}
     }
   }
 
@@ -299,9 +300,22 @@ export class RoomState {
       this.clock.observe(track.order)
       if (this.tracks.has(track.id) || this.removed.has(track.id)) continue
       if (live >= MAX_QUEUE) continue
-      this.tracks.set(track.id, track)
+      // Copia con solo los campos conocidos: lo que sobre no se guarda ni se reenvía.
+      this.tracks.set(track.id, {
+        id: track.id,
+        videoId: track.videoId,
+        title: track.title,
+        author: track.author,
+        addedBy: track.addedBy,
+        order: {counter: track.order.counter, peerId: track.order.peerId}
+      })
       live += 1
     }
+  }
+
+  /** Lápidas de pistas desconocidas solo hasta un tope: así el propio `state` sigue siendo válido. */
+  private tombstone(trackId: string): void {
+    if (this.tracks.has(trackId) || this.removed.size < MAX_REMOVED) this.removed.add(trackId)
   }
 
   /** Si la pista actual está borrada, pasa a la siguiente (o se detiene). */

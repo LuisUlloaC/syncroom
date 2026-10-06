@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest'
-import {LamportClock, ZERO_STAMP, compareStamps} from './stamp'
+import {LamportClock, MAX_COUNTER, ZERO_STAMP, compareStamps} from './stamp'
 import {fnv1a} from './hash'
 
 describe('stamps', () => {
@@ -12,6 +12,14 @@ describe('stamps', () => {
 
   it('any real stamp beats the zero stamp', () => {
     expect(compareStamps({counter: 1, peerId: ''}, ZERO_STAMP)).toBeGreaterThan(0)
+  })
+
+  it('ignores observed counters beyond the accepted range', () => {
+    const clock = new LamportClock('a')
+    clock.observe({counter: 2 ** 41, peerId: 'b'})
+    expect(clock.tick().counter).toBe(1)
+    clock.observe({counter: MAX_COUNTER, peerId: 'b'})
+    expect(clock.tick().counter).toBe(2)
   })
 
   it('ticks monotonically and jumps past observed stamps', () => {
