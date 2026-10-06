@@ -92,7 +92,8 @@ describe('BridgeServer http', () => {
   it('refuses requests without the right token', async () => {
     expect((await http('/')).status).toBe(403)
     expect((await http('/?t=nope')).status).toBe(403)
-    expect((await http(`/engine.js?t=${token.slice(0, -1)}0`)).status).toBe(403)
+    const almost = token.slice(0, -1) + (token.endsWith('0') ? '1' : '0')
+    expect((await http(`/engine.js?t=${almost}`)).status).toBe(403)
   })
 
   it('refuses a foreign Host header even with the token', async () => {
