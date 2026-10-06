@@ -56,7 +56,7 @@ There is no account and no SyncRoom server. Rooms exist only while someone is in
 - Some videos cannot be played outside youtube.com, or are blocked in your region. They are marked
   as not available for you and the rest of the room keeps listening.
 - In hidden mode an ad cannot be skipped; show the player window to skip it.
-- Joining the same room from two VS Code windows on one computer plays the audio twice.
+- Each VS Code window runs its own audio engine: joining the same room from two windows on one computer plays the audio twice.
 - Tested on Windows. macOS and Linux should work but are not verified yet.
 - Your computer clock must be roughly right, or relays may reject your messages.
 

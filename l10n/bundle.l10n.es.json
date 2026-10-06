@@ -36,7 +36,7 @@
   "SyncRoom needs Microsoft Edge, Google Chrome, Brave or Chromium to play audio, and none was found.": "SyncRoom necesita Microsoft Edge, Google Chrome, Brave o Chromium para reproducir audio y no se encontró ninguno.",
   "That is not a YouTube video or playlist link.": "Eso no es un enlace de vídeo o playlist de YouTube.",
   "That video cannot be played outside YouTube.": "Ese vídeo no se puede reproducir fuera de YouTube.",
-  "The audio engine keeps closing. Leaving the room.": "El motor de audio se cierra una y otra vez. Saliendo de la sala.",
+  "The audio engine keeps failing. Check that YouTube is reachable, then try again.": "El motor de audio falla una y otra vez. Comprueba que YouTube es accesible e inténtalo de nuevo.",
   "The browser set in \"syncroom.browserPath\" was not found.": "No se encontró el navegador indicado en «syncroom.browserPath».",
   "The queue is empty.": "La cola está vacía.",
   "The queue is full.": "La cola está llena.",

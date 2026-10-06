@@ -1,4 +1,4 @@
-import {mkdir} from 'node:fs/promises'
+import {mkdir, rm} from 'node:fs/promises'
 import {userInfo} from 'node:os'
 import {join} from 'node:path'
 import * as vscode from 'vscode'
@@ -28,6 +28,8 @@ interface ActiveRoom {
   visible: boolean
   /** true mientras somos nosotros quienes cerramos el motor. */
   expectedExit: boolean
+  /** true mientras se está relanzando tras un fallo. */
+  restarting: boolean
   restarts: number[]
 }
 
@@ -71,6 +73,8 @@ export class RoomController implements vscode.Disposable {
     await new Promise(done => setTimeout(done, GOODBYE_MS))
     await room.engine.stop()
     await room.bridge.close()
+    // El perfil es desechable: así nunca queda un navegador «restaurando» sesiones anteriores.
+    await rm(room.profileDir, {recursive: true, force: true, maxRetries: 3, retryDelay: 200}).catch(() => undefined)
     await vscode.commands.executeCommand('setContext', 'syncroom.inRoom', false)
     this.changed.fire()
   }
@@ -116,7 +120,8 @@ export class RoomController implements vscode.Disposable {
     const name = await this.ensureName(config)
     if (name === undefined) return
 
-    const profileDir = join(this.context.globalStorageUri.fsPath, 'engine-profile')
+    // Un perfil por ventana de VS Code: Chromium solo admite un proceso por perfil.
+    const profileDir = join(this.context.globalStorageUri.fsPath, `engine-profile-${process.pid}`)
     await mkdir(profileDir, {recursive: true})
     const bridge = await BridgeServer.start({pageDir: join(this.context.extensionPath, 'dist', 'engine')})
     const session = new RoomSession({
@@ -136,11 +141,13 @@ export class RoomController implements vscode.Disposable {
       profileDir,
       visible: false,
       expectedExit: false,
+      restarting: false,
       restarts: []
     }
     this.active = room
     session.onChange(() => this.changed.fire())
-    room.engine.onExit(() => this.onEngineExit(room))
+    room.engine.onExit(() => void this.onEngineTrouble(room))
+    session.onEngineFailure(() => void this.onEngineTrouble(room))
     session.start()
     this.launch(room)
     await vscode.commands.executeCommand('setContext', 'syncroom.inRoom', true)
@@ -149,21 +156,35 @@ export class RoomController implements vscode.Disposable {
 
   private launch(room: ActiveRoom): void {
     room.engine.start(buildEngineArgs({url: room.bridge.pageUrl, profileDir: room.profileDir, visible: room.visible}))
+    room.session.expectEngine()
   }
 
-  /** El usuario cerró la mini ventana o el navegador murió: seguir sonando en modo oculto. */
-  private onEngineExit(room: ActiveRoom): void {
-    if (this.active !== room || room.expectedExit) return
-    const now = Date.now()
-    room.restarts = [...room.restarts.filter(at => now - at < RESTART_WINDOW_MS), now]
-    if (room.restarts.length > MAX_RESTARTS) {
-      void vscode.window.showErrorMessage(t('The audio engine keeps closing. Leaving the room.'))
-      void this.leave()
-      return
+  /**
+   * El motor falló: el proceso terminó (el usuario cerró la mini ventana, el navegador murió),
+   * la página perdió el canal, o nunca llegó a decir «ready». Se relanza en modo oculto,
+   * con un presupuesto de reintentos para no quedarse en bucle.
+   */
+  private async onEngineTrouble(room: ActiveRoom): Promise<void> {
+    if (this.active !== room || room.expectedExit || room.restarting) return
+    room.restarting = true
+    try {
+      const now = Date.now()
+      room.restarts = [...room.restarts.filter(at => now - at < RESTART_WINDOW_MS), now]
+      if (room.restarts.length > MAX_RESTARTS) {
+        void vscode.window.showErrorMessage(t('The audio engine keeps failing. Check that YouTube is reachable, then try again.'))
+        await this.leave()
+        return
+      }
+      room.expectedExit = true
+      await room.engine.stop()
+      room.expectedExit = false
+      if (this.active !== room) return
+      room.visible = false
+      this.launch(room)
+      this.changed.fire()
+    } finally {
+      room.restarting = false
     }
-    room.visible = false
-    this.launch(room)
-    this.changed.fire()
   }
 
   private async reportMissingBrowser(wasConfigured: boolean): Promise<void> {
