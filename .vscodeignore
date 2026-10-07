@@ -3,7 +3,8 @@
 !dist/engine/**
 !dist/webview/webview.js
 !dist/webview/webview.css
-!media/**
+!media/syncroom.svg
+!media/icon.png
 !l10n/**
 !package.json
 !package.nls.json

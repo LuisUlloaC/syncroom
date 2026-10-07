@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- Dos oyentes (los dos aros); lo que comparten (la lente) es la música. -->
+  <rect width="256" height="256" rx="58" fill="#141821"/>
+  <path d="M128,66.5 A66 66 0 0 0 128,189.5 A66 66 0 0 0 128,66.5 Z" fill="#F4EFE6"/>
+  <path d="M117,105 L117,151 L156,128 Z" fill="#141821"/>
+  <circle cx="104" cy="128" r="66" fill="none" stroke="#F6B64B" stroke-width="11"/>
+  <circle cx="152" cy="128" r="66" fill="none" stroke="#4EC5D6" stroke-width="11"/>
+</svg>

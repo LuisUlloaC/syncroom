@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "publisher": "luisulloac",
   "license": "MIT",
+  "icon": "media/icon.png",
   "private": true,
   "engines": { "vscode": "^1.100.0" },
   "categories": ["Other"],
