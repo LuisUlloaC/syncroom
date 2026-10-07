@@ -85,6 +85,7 @@
       'chat.empty': 'No messages yet.',
       'chat.placeholder': 'Message the room',
       'chat.send': 'Send',
+      'chat.present': 'In the room: {0}',
       'chat.joined': '{0} joined',
       'chat.left': '{0} left'
     }
@@ -103,10 +104,11 @@
       ],
       playback: {trackId: 'p:1', playing: true, positionS: 84, durationS: 1344},
       chat: [
-        {id: 'j1', kind: 'joined', from: 'a', name: 'Dayana', text: '', at: Date.now() - 600000, mine: false},
-        {id: 'c1', kind: 'message', from: 'a', name: 'Dayana', text: 'pon algo de Creepy Nuts', at: Date.now() - 300000, mine: false},
-        {id: 'c2', kind: 'message', from: 'me', name: 'Luis', text: 'va, la siguiente es tuya. Este mensaje es largo para ver cómo parte en varias líneas sin desbordar la barra.', at: Date.now() - 120000, mine: true},
-        {id: 'c3', kind: 'message', from: 'a', name: 'Dayana', text: '🔥', at: Date.now() - 5000, mine: false}
+        {key: 1, id: 'present', kind: 'present', from: '', name: '', text: 'Dayana', at: Date.now() - 600000, mine: false},
+        {key: 2, id: 'c1', kind: 'message', from: 'a', name: 'Dayana', text: 'pon algo de Creepy Nuts', at: Date.now() - 300000, mine: false},
+        {key: 3, id: 'c2', kind: 'message', from: 'me', name: 'Luis', text: 'va, la siguiente es tuya. Este mensaje es largo para ver cómo parte en varias líneas sin desbordar la barra.', at: Date.now() - 120000, mine: true},
+        {key: 4, id: 'j1', kind: 'joined', from: 'b', name: 'Someone', text: '', at: Date.now() - 60000, mine: false},
+        {key: 5, id: 'c3', kind: 'message', from: 'a', name: 'Dayana', text: '🔥', at: Date.now() - 5000, mine: false}
       ],
       engineReady: true,
       fault: undefined,

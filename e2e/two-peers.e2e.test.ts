@@ -37,7 +37,8 @@ describe.each([
       await waitFor('a receives the chat', () => a.session.view().chat.some(l => l.kind === 'message' && l.text === 'hola desde Leo'), 30_000)
       a.session.say('hola Leo')
       await waitFor('b receives the chat', () => b.session.view().chat.some(l => l.kind === 'message' && l.text === 'hola Leo'), 30_000)
-      expect(a.session.view().chat.map(l => l.kind)).toContain('joined')
+      // Leo entró durante el margen de entrada de Ana («ya estaba») o después («entró»): una de las dos líneas.
+      await waitFor('a lists Leo as present or joined', () => a.session.view().chat.some(l => l.kind === 'present' || l.kind === 'joined'), 20_000)
       expect(a.session.view().chat.find(l => l.text === 'hola desde Leo')?.name).toBe('Leo')
 
       await waitFor('both are playing', () => stateOf(a) === 'playing' && stateOf(b) === 'playing', 60_000)

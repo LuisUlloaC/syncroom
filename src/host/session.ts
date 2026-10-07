@@ -33,8 +33,11 @@ export interface TrackView {
 }
 
 export interface ChatLine {
+  /** Clave local, única en esta sesión (el id del emisor no es de fiar). */
+  key: number
   id: string
-  kind: 'message' | 'joined' | 'left'
+  /** `present`: quienes ya estaban al entrar (nombres en `text`). */
+  kind: 'message' | 'joined' | 'left' | 'present'
   from: string
   name: string
   /** Vacío en joined/left. */
@@ -69,6 +72,8 @@ const DRIFT_TOLERANCE_S = 2
 const LOAD_GRACE_MS = 1500
 const DEFAULT_READY_TIMEOUT_MS = 20_000
 const MAX_CHAT_LINES = 200
+/** Quien aparece en este margen tras arrancar «ya estaba»: una sola línea, no una por persona. */
+const PRESENCE_GRACE_MS = 8000
 /** Códigos del IFrame API: parámetro inválido, error HTML5, no existe, incrustación prohibida (x2). */
 const UNPLAYABLE_CODES = new Set([2, 5, 100, 101, 150])
 
@@ -102,6 +107,9 @@ export class RoomSession {
   private chatSeq = 0
   /** Participantes ya anunciados en el chat (id → nombre), para detectar llegadas y salidas. */
   private announced = new Map<string, string>()
+  /** Hasta cuándo los recién vistos cuentan como «ya estaban». */
+  private presenceGraceUntil = 0
+  private presenceSummaryDue = false
 
   constructor(private readonly opts: SessionOptions) {
     this.now = opts.now ?? (() => Date.now())
@@ -247,7 +255,7 @@ export class RoomSession {
     if (clean === '' || !this.engineReady) return
     const out = this.state.chatMessage(clean)
     const id = out.msg.type === 'chat' ? out.msg.id : `${this.opts.peerId}:${this.chatSeq}`
-    this.pushChat({id, kind: 'message', from: this.opts.peerId, name: this.name, text: clean, at: this.now(), mine: true})
+    this.pushChat({key: 0, id, kind: 'message', from: this.opts.peerId, name: this.name, text: clean, at: this.now(), mine: true})
     this.sendAll([out])
     this.emit()
   }
@@ -270,6 +278,10 @@ export class RoomSession {
         this.status = NOTHING_LOADED
         this.reported = undefined
         this.loadGraceUntil = 0
+        if (this.announced.size === 0 && this.chat.length === 0) {
+          this.presenceGraceUntil = this.now() + PRESENCE_GRACE_MS
+          this.presenceSummaryDue = true
+        }
         this.opts.link.send({t: 'join', code: this.opts.code, direct: this.opts.direct, relays: this.opts.relays})
         this.opts.link.send({t: 'volume', value: this.volume})
         this.sendAll(this.state.join())
@@ -278,11 +290,15 @@ export class RoomSession {
         break
       case 'msg':
         if (!isRoomMessage(msg.msg)) break
-        if (msg.msg.type === 'chat' && msg.msg.from !== this.opts.peerId) {
-          const name = msg.msg.name !== '' ? msg.msg.name : this.state.peerName(msg.msg.from)
-          this.pushChat({id: msg.msg.id, kind: 'message', from: msg.msg.from, name, text: msg.msg.text, at: this.now(), mine: false})
-        }
+        // Primero el estado (así «entró» precede al primer mensaje de alguien nuevo), luego la línea.
         this.sendAll(this.state.receive(msg.msg, msg.via))
+        if (msg.msg.type === 'chat' && msg.msg.from !== this.opts.peerId) {
+          const {from, id, text} = msg.msg
+          if (this.chat.some(line => line.kind === 'message' && line.from === from && line.id === id)) break
+          const name = msg.msg.name !== '' ? msg.msg.name : this.state.peerName(from)
+          this.pushChat({key: 0, id, kind: 'message', from, name, text, at: this.now(), mine: false})
+          this.emit()
+        }
         break
       case 'status': {
         if (this.now() < this.loadGraceUntil && msg.status.videoId !== this.status?.videoId) break
@@ -332,6 +348,7 @@ export class RoomSession {
   private tick(): void {
     this.ticks += 1
     if (!this.engineReady) return
+    if (this.presenceSummaryDue && this.now() >= this.presenceGraceUntil) this.presenceSummary()
     if (this.ticks % HEARTBEAT_EVERY === 0) {
       this.sendAll(this.state.heartbeat(this.ticks % RELAY_HEARTBEAT_EVERY === 0))
     }
@@ -345,18 +362,30 @@ export class RoomSession {
   /** Compara los participantes con nombre contra los ya anunciados y escribe «entró» / «salió». */
   private announcePresence(): void {
     const present = new Map(this.state.peerList().filter(p => p.id !== this.opts.peerId && p.name !== '').map(p => [p.id, p.name]))
+    const settling = this.now() < this.presenceGraceUntil
     for (const [id, name] of present) {
-      if (!this.announced.has(id)) this.pushChat({id: `joined:${id}:${this.chatSeq}`, kind: 'joined', from: id, name, text: '', at: this.now(), mine: false})
+      if (this.announced.has(id)) continue
+      // Durante el margen de entrada se anota sin línea: saldrán juntos en el resumen.
+      if (!settling) this.pushChat({key: 0, id: `joined:${id}`, kind: 'joined', from: id, name, text: '', at: this.now(), mine: false})
     }
     for (const [id, name] of this.announced) {
-      if (!present.has(id)) this.pushChat({id: `left:${id}:${this.chatSeq}`, kind: 'left', from: id, name, text: '', at: this.now(), mine: false})
+      if (!present.has(id)) this.pushChat({key: 0, id: `left:${id}`, kind: 'left', from: id, name, text: '', at: this.now(), mine: false})
     }
     this.announced = present
   }
 
+  /** Al cerrarse el margen de entrada: una sola línea con quienes ya estaban. */
+  private presenceSummary(): void {
+    this.presenceSummaryDue = false
+    const names = [...this.announced.values()].sort((a, b) => a.localeCompare(b))
+    if (names.length === 0) return
+    this.pushChat({key: 0, id: 'present', kind: 'present', from: '', name: '', text: names.join(', '), at: this.now(), mine: false})
+    this.emit()
+  }
+
   private pushChat(line: ChatLine): void {
     this.chatSeq += 1
-    this.chat = [...this.chat.slice(-(MAX_CHAT_LINES - 1)), line]
+    this.chat = [...this.chat.slice(-(MAX_CHAT_LINES - 1)), {...line, key: this.chatSeq}]
   }
 
   private onStateChange(): void {

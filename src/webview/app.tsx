@@ -4,6 +4,7 @@ import type {ChatLine, RoomView, TrackView} from '../host/session'
 import type {HostToWebview, ViewState, WebviewToHost} from '../protocol/webview'
 import {unreadSince} from './chat-unread'
 import {clock, thumbnail} from './format'
+import {dropPlacement, type DropTarget} from './queue-drop'
 import {Icon} from './icons'
 
 interface Persisted {
@@ -257,11 +258,6 @@ function AddLink() {
   )
 }
 
-interface DropTarget {
-  id: string
-  side: 'before' | 'after'
-}
-
 function Queue({tracks}: {tracks: TrackView[]}) {
   const [dragging, setDragging] = useState<string | undefined>(undefined)
   const [target, setTarget] = useState<DropTarget | undefined>(undefined)
@@ -274,12 +270,8 @@ function Queue({tracks}: {tracks: TrackView[]}) {
   }
 
   const drop = (): void => {
-    if (dragging === undefined || target === undefined || target.id === dragging) return finish()
-    const others = tracks.filter(track => track.id !== dragging)
-    const at = others.findIndex(track => track.id === target.id)
-    const before = target.side === 'before' ? others[at - 1] : others[at]
-    const after = target.side === 'before' ? others[at] : others[at + 1]
-    post({t: 'move', trackId: dragging, beforeId: before?.id ?? null, afterId: after?.id ?? null})
+    const placement = dragging === undefined || target === undefined ? undefined : dropPlacement(tracks.map(t => t.id), dragging, target)
+    if (dragging !== undefined && placement !== undefined) post({t: 'move', trackId: dragging, ...placement})
     finish()
   }
 
@@ -356,7 +348,17 @@ function Queue({tracks}: {tracks: TrackView[]}) {
   )
 }
 
-const time = (at: number): string => new Date(at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
+// La hora de cada línea se formatea una sola vez: la vista se repinta cada segundo con el chat entero.
+const times = new Map<number, string>()
+function time(key: number, at: number): string {
+  let text = times.get(key)
+  if (text === undefined) {
+    text = new Date(at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
+    if (times.size > 400) times.clear()
+    times.set(key, text)
+  }
+  return text
+}
 
 function Chat({lines}: {lines: ChatLine[]}) {
   const [open, setOpen] = useState<boolean>(() => vscode.getState()?.chatOpen ?? true)
@@ -411,14 +413,16 @@ function Chat({lines}: {lines: ChatLine[]}) {
             >
               {lines.map(line =>
                 line.kind === 'message' ? (
-                  <li key={line.id} class={line.mine ? 'line mine' : 'line'}>
+                  <li key={line.key} class={line.mine ? 'line mine' : 'line'}>
                     <span class="who">{line.name === '' ? s('room.unnamed') : line.name}</span>
-                    <span class="when">{time(line.at)}</span>
+                    <span class="when">{time(line.key, line.at)}</span>
                     <span class="text">{line.text}</span>
                   </li>
                 ) : (
-                  <li key={line.id} class="system">
-                    {(line.kind === 'joined' ? s('chat.joined') : s('chat.left')).replace('{0}', line.name)}
+                  <li key={line.key} class="system">
+                    {line.kind === 'present'
+                      ? s('chat.present').replace('{0}', line.text)
+                      : (line.kind === 'joined' ? s('chat.joined') : s('chat.left')).replace('{0}', line.name)}
                   </li>
                 )
               )}

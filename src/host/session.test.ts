@@ -506,9 +506,54 @@ describe('chat', () => {
     ])
   })
 
+  it('writes «joined» before a newcomer’s first chat message', () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    vi.advanceTimersByTime(10_000)
+    link.take()
+    const other = remotePeer('other')
+    link.emit({t: 'msg', msg: other.chatMessage('primero hablo').msg, via: 'relay'})
+    expect(lines(session).map(l => l[0])).toEqual(['joined', 'message'])
+  })
+
+  it('drops a chat line repeated with the same sender and id', () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    vi.advanceTimersByTime(10_000)
+    link.take()
+    const other = remotePeer('other')
+    const msg = other.chatMessage('una vez').msg
+    link.emit({t: 'msg', msg, via: 'relay'})
+    link.emit({t: 'msg', msg, via: 'direct'})
+    expect(lines(session).filter(l => l[0] === 'message')).toHaveLength(1)
+  })
+
+  it('people already in the room when you enter are listed once, not announced one by one', () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    link.take()
+    for (const id of ['ana', 'leo']) {
+      for (const o of remotePeer(id).join()) link.emit({t: 'msg', msg: o.msg, via: 'direct'})
+    }
+    expect(lines(session)).toEqual([])
+    vi.advanceTimersByTime(9_000)
+    expect(lines(session)).toEqual([['present', '', 'ANA, LEO', false]])
+    // Quien llega después del margen sí se anuncia.
+    for (const o of remotePeer('zoe').join()) link.emit({t: 'msg', msg: o.msg, via: 'direct'})
+    expect(lines(session).map(l => l[0])).toEqual(['present', 'joined'])
+  })
+
+  it('an empty room at entry writes no presence line', () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    vi.advanceTimersByTime(9_000)
+    expect(lines(session)).toEqual([])
+  })
+
   it('announces arrivals once they have a name, and departures', () => {
     const {link, session} = setup()
     link.emit({t: 'ready'})
+    vi.advanceTimersByTime(10_000)
     link.take()
     // Primero llega un ping (sin nombre): todavía no se anuncia nada.
     link.emit({t: 'msg', msg: {type: 'ping', from: 'other', to: 'me', t0: 1}, via: 'direct'})
@@ -530,6 +575,7 @@ describe('chat', () => {
   it('announces a peer that silently times out as left', () => {
     const {link, session} = setup()
     link.emit({t: 'ready'})
+    vi.advanceTimersByTime(10_000)
     link.take()
     const other = remotePeer('other')
     for (const o of other.join()) link.emit({t: 'msg', msg: o.msg, via: 'direct'})

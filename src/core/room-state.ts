@@ -187,6 +187,10 @@ export class RoomState {
     const before = beforeId === null ? null : this.liveTrack(beforeId)
     const after = afterId === null ? null : this.liveTrack(afterId)
     if (before === undefined || after === undefined) return []
+    // Ya está entre esos dos: nada que mover ni que contar.
+    const queue = this.queue()
+    const at = queue.findIndex(t => t.id === trackId)
+    if ((queue[at - 1]?.id ?? null) === beforeId && (queue[at + 1]?.id ?? null) === afterId) return []
     const lower = before?.rank ?? null
     let upper = after?.rank ?? null
     if (lower !== null && upper !== null && lower > upper) return []

@@ -140,6 +140,15 @@ describe('reordering', () => {
     expect(ids(a)).toEqual([meta(1).videoId, meta(3).videoId])
   })
 
+  it('moving a track to where it already is does nothing', () => {
+    const a = peer('a', {t: 1000})
+    a.addTracks([meta(1), meta(2), meta(3)])
+    const [t1, t2, t3] = a.queue().map(t => t.id) as [string, string, string]
+    expect(a.moveTrack(t2, t1, t3)).toEqual([])
+    expect(a.moveTrack(t1, null, t2)).toEqual([])
+    expect(a.moveTrack(t3, t2, null)).toEqual([])
+  })
+
   it('playNext puts a track right after the current one and next() honours it', () => {
     const a = peer('a', {t: 1000})
     a.addTracks([meta(1), meta(2), meta(3), meta(4)])

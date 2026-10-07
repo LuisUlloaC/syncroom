@@ -47,6 +47,7 @@ export function webviewStrings(): Record<string, string> {
     'chat.empty': t('No messages yet.'),
     'chat.placeholder': t('Message the room'),
     'chat.send': t('Send'),
+    'chat.present': t('In the room: {0}', '{0}'),
     'chat.joined': t('{0} joined', '{0}'),
     'chat.left': t('{0} left', '{0}')
   }

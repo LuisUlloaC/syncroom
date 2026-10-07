@@ -3,6 +3,7 @@ import type {ChatLine} from '../host/session'
 import {unreadSince} from './chat-unread'
 
 const line = (id: string, mine = false, kind: ChatLine['kind'] = 'message'): ChatLine => ({
+  key: Number(id),
   id,
   kind,
   from: mine ? 'me' : 'x',
