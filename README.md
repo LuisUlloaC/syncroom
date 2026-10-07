@@ -52,7 +52,7 @@ There is no account and no SyncRoom server. Rooms exist only while someone is in
 
 ## Known limits
 
-- Playlists add their first 15 videos.
+- Playlists add their first 15 videos. YouTube Mixes (`list=RD…`) add the first batch YouTube generates, about 25 videos.
 - Some videos cannot be played outside youtube.com, or are blocked in your region. They are marked
   as not available for you and the rest of the room keeps listening.
 - In hidden mode an ad cannot be skipped; show the player window to skip it.

@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest'
-import {PLAYLIST_LIMIT, ResolveError, fetchPlaylist, fetchVideoMeta, resolveLink, type HttpGet} from './youtube'
+import {PLAYLIST_LIMIT, ResolveError, fetchMix, fetchPlaylist, fetchVideoMeta, resolveLink, type HttpGet} from './youtube'
 
 const respond = (status: number, body: string): HttpGet => async () => ({
   ok: status >= 200 && status < 300,
@@ -176,14 +176,69 @@ describe('resolveLink', () => {
     expect(result.startIndex).toBe(0)
   })
 
-  it('falls back to the single video when the list has no feed (mixes, private lists)', async () => {
+  it('falls back to the single video when the list has no feed (private or deleted lists)', async () => {
     const get = byUrl({
       'https://www.youtube.com/feeds/': [404, 'Not Found'],
       'https://www.youtube.com/oembed': [200, OEMBED]
     })
-    const result = await resolveLink('https://music.youtube.com/watch?v=M7lc1UVf-VE&list=RDAMVMM7lc1UVf-VE', get)
+    const result = await resolveLink('https://www.youtube.com/watch?v=M7lc1UVf-VE&list=PLMC9KNkIncKtPzgY-5rmhvj7fax8fdxoj', get)
     expect(result.metas.map(m => m.videoId)).toEqual(['M7lc1UVf-VE'])
     expect(result.truncated).toBe(false)
+  })
+
+  const mixPanel = (ids: string[]): string =>
+    JSON.stringify({
+      contents: {
+        twoColumnWatchNextResults: {
+          playlist: {
+            playlist: {
+              title: 'Mix - One',
+              contents: ids.map(id => ({
+                playlistPanelVideoRenderer: {
+                  videoId: id,
+                  title: {simpleText: `Title ${id}`},
+                  shortBylineText: {runs: [{text: `Author ${id}`}]}
+                }
+              }))
+            }
+          }
+        }
+      }
+    })
+
+  it('resolves a mix through the internal next endpoint, starting at the pasted video', async () => {
+    const requests: Array<{url: string; body: unknown}> = []
+    const get: HttpGet = async (url, init) => {
+      requests.push({url, body: init === undefined ? undefined : JSON.parse(init.body)})
+      return {ok: true, status: 200, text: async () => mixPanel(['E9EKgA_Gs2c', 'tRwHpyOq4P4', 'E9EKgA_Gs2c', 'bad'])}
+    }
+    const result = await resolveLink('https://www.youtube.com/watch?v=E9EKgA_Gs2c&list=RDE9EKgA_Gs2c&start_radio=1', get)
+    expect(result.metas).toEqual([
+      {videoId: 'E9EKgA_Gs2c', title: 'Title E9EKgA_Gs2c', author: 'Author E9EKgA_Gs2c'},
+      {videoId: 'tRwHpyOq4P4', title: 'Title tRwHpyOq4P4', author: 'Author tRwHpyOq4P4'}
+    ])
+    expect(result.startIndex).toBe(0)
+    expect(result.truncated).toBe(false)
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.url).toBe('https://www.youtube.com/youtubei/v1/next?prettyPrint=false')
+    expect(requests[0]?.body).toMatchObject({videoId: 'E9EKgA_Gs2c', playlistId: 'RDE9EKgA_Gs2c'})
+  })
+
+  it('keeps the single video when the mix endpoint changes shape or fails', async () => {
+    const shapes: Array<[number, string]> = [
+      [200, '{"contents":{}}'],
+      [200, '<html>consent</html>'],
+      [404, 'Not Found']
+    ]
+    for (const [status, body] of shapes) {
+      const get = byUrl({
+        'https://www.youtube.com/youtubei/': [status, body],
+        'https://www.youtube.com/oembed': [200, OEMBED]
+      })
+      const result = await resolveLink('https://www.youtube.com/watch?v=M7lc1UVf-VE&list=RDM7lc1UVf-VE', get)
+      expect(result.metas.map(m => m.videoId)).toEqual(['M7lc1UVf-VE'])
+    }
+    expect(await codeOf(fetchMix('RDM7lc1UVf-VE', 'M7lc1UVf-VE', respond(503, 'busy')))).toBe('network')
   })
 
   it('still fails when a bare playlist link has no feed', async () => {

@@ -27,4 +27,12 @@ describe('resolve against the real YouTube', () => {
     expect(result.metas.map(m => m.videoId)).toEqual(list.metas.map(m => m.videoId))
     expect(result.startIndex).toBe(1)
   })
+
+  it('loads a mix (list=RD…) through the internal next endpoint', async () => {
+    const result = await resolveLink('https://www.youtube.com/watch?v=E9EKgA_Gs2c&list=RDE9EKgA_Gs2c&start_radio=1')
+    expect(result.metas.length).toBeGreaterThan(10)
+    expect(result.metas[0]?.videoId).toBe('E9EKgA_Gs2c')
+    expect(result.startIndex).toBe(0)
+    for (const meta of result.metas) expect(meta.title.length).toBeGreaterThan(0)
+  })
 })
