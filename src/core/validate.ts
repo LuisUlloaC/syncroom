@@ -1,6 +1,6 @@
 import {generateKeyBetween} from 'fractional-indexing'
 import {MAX_COUNTER} from './stamp'
-import type {PlaybackWire, RoomMessage, Stamp, Track} from './types'
+import type {PlaybackWire, Policy, RoomMessage, Stamp, Track} from './types'
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
 const MAX_ID = 64
@@ -78,6 +78,18 @@ function isPlaybackWire(value: unknown): value is PlaybackWire {
   )
 }
 
+function isPolicy(value: unknown): value is Policy {
+  return (
+    isDict(value) &&
+    isId(value.ownerKey) &&
+    isId(value.ownerPeerId) &&
+    isText(value.ownerName, MAX_NAME) &&
+    typeof value.lockQueue === 'boolean' &&
+    typeof value.lockPlayback === 'boolean' &&
+    isStamp(value.stamp)
+  )
+}
+
 /** Lo que llega de la red no es de fiar: solo pasa lo que tiene exactamente la forma esperada. */
 export function isRoomMessage(value: unknown): value is RoomMessage {
   if (!isDict(value) || !isId(value.from)) return false
@@ -91,8 +103,11 @@ export function isRoomMessage(value: unknown): value is RoomMessage {
         Array.isArray(value.removed) &&
         value.removed.length <= MAX_REMOVED &&
         value.removed.every(isId) &&
-        isPlaybackWire(value.playback)
+        isPlaybackWire(value.playback) &&
+        (value.policy === undefined || isPolicy(value.policy))
       )
+    case 'policy':
+      return isPolicy(value.policy)
     case 'add':
       return isTrackList(value.tracks)
     case 'remove':

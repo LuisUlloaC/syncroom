@@ -29,6 +29,8 @@
       --vscode-panel-border: #2b2b2b;
       --vscode-editorWidget-background: #202020;
       --vscode-list-hoverBackground: #2a2d2e;
+      --vscode-badge-background: #4d4d4d;
+      --vscode-badge-foreground: #ffffff;
       --vscode-list-inactiveSelectionBackground: #37373d;
       --vscode-textLink-activeForeground: #4daafc;
       --vscode-testing-iconPassed: #73c991;
@@ -78,6 +80,12 @@
       'queue.addedBy': 'added by {0}',
       'queue.unplayable': 'not available for you',
       'queue.playNext': 'Play next',
+      'queue.lockQueue': 'Only you can change the queue',
+      'queue.lockPlayback': 'Only you can play, pause or skip',
+      'queue.lockQueueLabel': 'Queue',
+      'queue.lockPlaybackLabel': 'Playback',
+      'queue.lockedQueue': 'Only {0} can change the queue.',
+      'queue.lockedPlayback': 'Only {0} can play, pause or skip.',
       'queue.drag': 'Drag to reorder',
       'chat.join': 'Join or create a room in the SyncRoom view to chat.',
       'chat.empty': 'No messages yet.',
@@ -101,6 +109,10 @@
         track(4, 'aaaaaaaaaaa', 'Blocked in your country', 'Label', 'Dayana', {unplayable: true})
       ],
       playback: {trackId: 'p:1', playing: true, positionS: 84, durationS: 1344},
+      // ?policy=guest: lo que ve alguien que no es el dueño con la lista bloqueada.
+      policy: new URLSearchParams(location.search).get('policy') === 'guest'
+        ? {ownerName: 'Dayana', mine: false, lockQueue: true, lockPlayback: true, canEditQueue: false, canControlPlayback: false}
+        : {ownerName: 'Luis', mine: true, lockQueue: true, lockPlayback: false, canEditQueue: true, canControlPlayback: true},
       chat: [
         {key: 1, id: 'present', kind: 'present', from: '', name: '', text: 'Dayana', at: Date.now() - 600000, mine: false},
         {key: 2, id: 'c1', kind: 'message', from: 'a', name: 'Dayana', text: 'pon algo de Creepy Nuts', at: Date.now() - 300000, mine: false},

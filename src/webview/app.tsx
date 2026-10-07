@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState} from 'preact/hooks'
 import {formatRoomCode} from '../core/ids'
-import type {ChatLine, RoomView, TrackView} from '../host/session'
+import type {ChatLine, PolicyView, RoomView, TrackView} from '../host/session'
 import type {HostToWebview, ViewState, WebviewToHost} from '../protocol/webview'
 import {clock, thumbnail} from './format'
 import {dropPlacement, type DropTarget} from './queue-drop'
@@ -74,6 +74,8 @@ function Lobby() {
 
 function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
   const current = room.tracks.find(track => track.current)
+  const canPlay = room.policy?.canControlPlayback ?? true
+  const canEdit = room.policy?.canEditQueue ?? true
   const others = room.peers.filter(peer => peer.id !== room.me.id)
   const link = others.length === 0 ? s('room.alone') : room.net.directPeers > 0 ? s('room.direct') : s('room.relayed')
 
@@ -109,11 +111,11 @@ function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
         <p class="by">
           {current === undefined ? s('player.hint') : current.unplayable ? s('player.unplayable') : current.author}
         </p>
-        <Scrubber position={room.playback.positionS} duration={room.playback.durationS} />
+        <Scrubber position={room.playback.positionS} duration={room.playback.durationS} disabled={!canPlay} />
         <div class="transport">
           <button
             class="icon big"
-            disabled={room.tracks.length === 0}
+            disabled={room.tracks.length === 0 || !canPlay}
             onClick={() => post({t: 'toggle'})}
             title={room.playback.playing ? s('player.pause') : s('player.play')}
             aria-label={room.playback.playing ? s('player.pause') : s('player.play')}
@@ -122,7 +124,7 @@ function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
           </button>
           <button
             class="icon"
-            disabled={current === undefined}
+            disabled={current === undefined || !canPlay}
             onClick={() => post({t: 'next'})}
             title={s('player.next')}
             aria-label={s('player.next')}
@@ -152,8 +154,8 @@ function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
         </div>
       </section>
 
-      <AddLink />
-      <Queue tracks={room.tracks} />
+      <AddLink disabled={!canEdit} />
+      <Queue tracks={room.tracks} policy={room.policy} />
     </main>
   )
 }
@@ -205,7 +207,7 @@ function NameEditor({initial, current, onDone}: {initial: string; current: strin
   )
 }
 
-function Scrubber({position, duration}: {position: number; duration: number}) {
+function Scrubber({position, duration, disabled}: {position: number; duration: number; disabled: boolean}) {
   // Mientras se arrastra manda el dedo, no el estado que sigue llegando del host.
   const [dragging, setDragging] = useState<number | undefined>(undefined)
   const value = dragging ?? Math.min(position, duration)
@@ -217,7 +219,7 @@ function Scrubber({position, duration}: {position: number; duration: number}) {
         max={Math.max(1, Math.floor(duration))}
         step={1}
         value={value}
-        disabled={duration <= 0}
+        disabled={duration <= 0 || disabled}
         aria-label={s('player.seek')}
         onInput={event => setDragging(Number(event.currentTarget.value))}
         onChange={event => {
@@ -231,7 +233,7 @@ function Scrubber({position, duration}: {position: number; duration: number}) {
   )
 }
 
-function AddLink() {
+function AddLink({disabled}: {disabled: boolean}) {
   const [url, setUrl] = useState('')
   return (
     <form
@@ -249,16 +251,53 @@ function AddLink() {
         aria-label={s('add.placeholder')}
         spellcheck={false}
         autocomplete="off"
+        disabled={disabled}
         onInput={event => setUrl(event.currentTarget.value)}
       />
-      <button type="submit" disabled={url.trim() === ''}>
+      <button type="submit" disabled={url.trim() === '' || disabled}>
         {s('add.button')}
       </button>
     </form>
   )
 }
 
-function Queue({tracks}: {tracks: TrackView[]}) {
+/** Los dos candados del dueño: lista y reproducción. */
+function Locks({policy}: {policy: PolicyView}) {
+  const toggle = (locks: {lockQueue?: boolean; lockPlayback?: boolean}): void =>
+    post({t: 'locks', lockQueue: locks.lockQueue ?? policy.lockQueue, lockPlayback: locks.lockPlayback ?? policy.lockPlayback})
+  return (
+    <span class="locks">
+      <button
+        class={policy.lockQueue ? 'lock on' : 'lock'}
+        aria-pressed={policy.lockQueue}
+        title={s('queue.lockQueue')}
+        onClick={() => toggle({lockQueue: !policy.lockQueue})}
+      >
+        <Icon name={policy.lockQueue ? 'lock' : 'unlock'} />
+        {s('queue.lockQueueLabel')}
+      </button>
+      <button
+        class={policy.lockPlayback ? 'lock on' : 'lock'}
+        aria-pressed={policy.lockPlayback}
+        title={s('queue.lockPlayback')}
+        onClick={() => toggle({lockPlayback: !policy.lockPlayback})}
+      >
+        <Icon name={policy.lockPlayback ? 'lock' : 'unlock'} />
+        {s('queue.lockPlaybackLabel')}
+      </button>
+    </span>
+  )
+}
+
+function Queue({tracks, policy}: {tracks: TrackView[]; policy: PolicyView | undefined}) {
+  const canEdit = policy?.canEditQueue ?? true
+  const canPlay = policy?.canControlPlayback ?? true
+  const notices = policy === undefined || policy.mine
+    ? []
+    : [
+        ...(policy.lockQueue && !canEdit ? [s('queue.lockedQueue').replace('{0}', policy.ownerName)] : []),
+        ...(policy.lockPlayback && !canPlay ? [s('queue.lockedPlayback').replace('{0}', policy.ownerName)] : [])
+      ]
   const [dragging, setDragging] = useState<string | undefined>(undefined)
   const [target, setTarget] = useState<DropTarget | undefined>(undefined)
   const currentIndex = tracks.findIndex(track => track.current)
@@ -278,8 +317,16 @@ function Queue({tracks}: {tracks: TrackView[]}) {
   return (
     <section class="queue">
       <h3>
-        {s('queue.title')} <span>{tracks.length}</span>
+        <span>
+          {s('queue.title')} <span class="count">{tracks.length}</span>
+        </span>
+        {policy?.mine === true && <Locks policy={policy} />}
       </h3>
+      {notices.map(text => (
+        <p key={text} class="locked">
+          <Icon name="lock" /> {text}
+        </p>
+      ))}
       {tracks.length === 0 ? (
         <p class="hint">{s('queue.empty')}</p>
       ) : (
@@ -296,8 +343,9 @@ function Queue({tracks}: {tracks: TrackView[]}) {
               <li
                 key={track.id}
                 class={classes === '' ? undefined : classes}
-                draggable
+                draggable={canEdit}
                 onDragStart={event => {
+                  if (!canEdit) return
                   setDragging(track.id)
                   if (event.dataTransfer !== null) {
                     event.dataTransfer.effectAllowed = 'move'
@@ -321,7 +369,7 @@ function Queue({tracks}: {tracks: TrackView[]}) {
                   <span class="num">{index + 1}</span>
                   <Icon name="grip" />
                 </span>
-                <button class="pick" disabled={track.current} onClick={() => post({t: 'playNow', trackId: track.id})} title={s('queue.playNow')}>
+                <button class="pick" disabled={track.current || !canPlay} onClick={() => post({t: 'playNow', trackId: track.id})} title={s('queue.playNow')}>
                   <span class="t">{track.title}</span>
                   <span class="m">
                     {[track.author, s('queue.addedBy').replace('{0}', track.addedBy), track.unplayable ? s('queue.unplayable') : '']
@@ -329,16 +377,18 @@ function Queue({tracks}: {tracks: TrackView[]}) {
                       .join(' · ')}
                   </span>
                 </button>
-                <span class="tools">
-                  {!track.current && track.id !== nextId && (
-                    <button class="icon" onClick={() => post({t: 'playNext', trackId: track.id})} title={s('queue.playNext')} aria-label={s('queue.playNext')}>
-                      <Icon name="up" />
+                {canEdit && (
+                  <span class="tools">
+                    {!track.current && track.id !== nextId && (
+                      <button class="icon" onClick={() => post({t: 'playNext', trackId: track.id})} title={s('queue.playNext')} aria-label={s('queue.playNext')}>
+                        <Icon name="up" />
+                      </button>
+                    )}
+                    <button class="icon" onClick={() => post({t: 'remove', trackId: track.id})} title={s('queue.remove')} aria-label={s('queue.remove')}>
+                      <Icon name="trash" />
                     </button>
-                  )}
-                  <button class="icon" onClick={() => post({t: 'remove', trackId: track.id})} title={s('queue.remove')} aria-label={s('queue.remove')}>
-                    <Icon name="trash" />
-                  </button>
-                </span>
+                  </span>
+                )}
               </li>
             )
           })}

@@ -25,3 +25,4 @@ export type WebviewToHost =
   | {t: 'move'; trackId: string; beforeId: string | null; afterId: string | null}
   | {t: 'playNext'; trackId: string}
   | {t: 'say'; text: string}
+  | {t: 'locks'; lockQueue: boolean; lockPlayback: boolean}

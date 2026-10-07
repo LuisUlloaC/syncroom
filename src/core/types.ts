@@ -43,11 +43,30 @@ export interface Peer {
   name: string
 }
 
+/**
+ * Quién manda en la sala y qué bloquea. `ownerKey` es estable por instalación (sobrevive a salir y
+ * volver); `ownerPeerId` es el peer actual del dueño. Solo gana una política más nueva del mismo dueño.
+ */
+export interface Policy {
+  ownerKey: string
+  ownerPeerId: PeerId
+  ownerName: string
+  lockQueue: boolean
+  lockPlayback: boolean
+  stamp: Stamp
+}
+
+export interface Locks {
+  lockQueue?: boolean
+  lockPlayback?: boolean
+}
+
 export type Via = 'direct' | 'relay'
 
 export type RoomMessage =
   | {type: 'hello'; from: PeerId; name: string; digest: string}
-  | {type: 'state'; from: PeerId; name: string; tracks: Track[]; removed: string[]; playback: PlaybackWire}
+  | {type: 'state'; from: PeerId; name: string; tracks: Track[]; removed: string[]; playback: PlaybackWire; policy?: Policy}
+  | {type: 'policy'; from: PeerId; policy: Policy}
   | {type: 'add'; from: PeerId; tracks: Track[]}
   | {type: 'remove'; from: PeerId; trackId: string}
   | {type: 'move'; from: PeerId; trackId: string; rank: string; moved: Stamp}

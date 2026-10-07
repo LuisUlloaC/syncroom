@@ -1,6 +1,6 @@
 import {RoomState} from '../core/room-state'
 import {reconcile, type Desired, type PlayerStatus} from '../core/sync'
-import type {Outgoing, Peer} from '../core/types'
+import type {Locks, Outgoing, Peer} from '../core/types'
 import {MAX_CHAT, isRoomMessage} from '../core/validate'
 import type {EngineLink, EngineToHost} from '../protocol/bridge'
 import type {ResolvedLink} from '../resolve/youtube'
@@ -9,6 +9,12 @@ export interface SessionOptions {
   code: string
   peerId: string
   name: string
+  /** Clave estable de esta instalación (dueño de las salas que crea). */
+  ownerKey: string
+  /** true = esta ventana crea la sala y se hace dueña. */
+  claim: boolean
+  /** Bloqueos con los que se crea la sala (los recordados de la última vez). */
+  initialLocks?: Locks
   /** false = solo relays (no se revela la IP a los demás). */
   direct: boolean
   relays: string[]
@@ -47,12 +53,24 @@ export interface ChatLine {
   mine: boolean
 }
 
+export interface PolicyView {
+  ownerName: string
+  /** Soy el dueño: puedo cambiar los bloqueos. */
+  mine: boolean
+  lockQueue: boolean
+  lockPlayback: boolean
+  canEditQueue: boolean
+  canControlPlayback: boolean
+}
+
 export interface RoomView {
   code: string
   me: Peer
   peers: Peer[]
   tracks: TrackView[]
   chat: ChatLine[]
+  /** undefined = sala sin dueño (nadie la reclamó): todo permitido. */
+  policy: PolicyView | undefined
   playback: {trackId: string | null; playing: boolean; positionS: number; durationS: number}
   engineReady: boolean
   /** Código del fallo que impide reproducir aunque el motor esté en marcha. */
@@ -115,7 +133,7 @@ export class RoomSession {
     this.now = opts.now ?? (() => Date.now())
     this.volume = clampVolume(opts.volume)
     this.name = opts.name
-    this.state = new RoomState({peerId: opts.peerId, name: opts.name, now: this.now})
+    this.state = new RoomState({peerId: opts.peerId, name: opts.name, ownerKey: opts.ownerKey, now: this.now})
     this.state.onChange(() => this.onStateChange())
   }
 
@@ -169,6 +187,7 @@ export class RoomSession {
       me: {id: this.opts.peerId, name: this.name},
       peers: this.state.peerList(),
       chat: this.chat,
+      policy: this.policyView(),
       tracks: this.state.queue().map(track => ({
         id: track.id,
         videoId: track.videoId,
@@ -239,6 +258,27 @@ export class RoomSession {
     this.sendAll(this.state.seek(positionS))
   }
 
+  /** Solo surte efecto si soy el dueño. */
+  setLocks(locks: Locks): void {
+    const out = this.state.setLocks(locks)
+    if (out.length === 0) return
+    this.sendAll(out)
+    this.emit()
+  }
+
+  private policyView(): PolicyView | undefined {
+    const policy = this.state.getPolicy()
+    if (policy === undefined) return undefined
+    return {
+      ownerName: policy.ownerName,
+      mine: this.state.isOwner(),
+      lockQueue: policy.lockQueue,
+      lockPlayback: policy.lockPlayback,
+      canEditQueue: this.state.mayEditQueue(),
+      canControlPlayback: this.state.mayControlPlayback()
+    }
+  }
+
   /** Nombre nuevo, recortado y acotado; vacío se ignora. Se anuncia al momento si el motor está listo. */
   rename(name: string): void {
     const clean = name.trim().slice(0, MAX_NAME)
@@ -285,6 +325,8 @@ export class RoomSession {
         this.opts.link.send({t: 'join', code: this.opts.code, direct: this.opts.direct, relays: this.opts.relays})
         this.opts.link.send({t: 'volume', value: this.volume})
         this.sendAll(this.state.join())
+        // Quien crea la sala la reclama una vez; tras un reinicio del motor ya hay política.
+        if (this.opts.claim) this.sendAll(this.state.claimRoom(this.opts.initialLocks ?? {}))
         this.reconcileNow(TIGHT_TOLERANCE_S)
         this.emit()
         break

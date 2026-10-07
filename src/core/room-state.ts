@@ -2,7 +2,7 @@ import {generateKeyBetween, generateNKeysBetween} from 'fractional-indexing'
 import {fnv1a} from './hash'
 import {LamportClock, ZERO_STAMP, compareStamps} from './stamp'
 import {MAX_REMOVED} from './validate'
-import type {Outgoing, Peer, PeerId, Playback, PlaybackWire, RoomMessage, Track, Via, VideoMeta} from './types'
+import type {Locks, Outgoing, Peer, PeerId, Playback, PlaybackWire, Policy, RoomMessage, Track, Via, VideoMeta} from './types'
 
 export const RELAY_TRANSIT_MS = 250
 export const DEFAULT_DIRECT_TRANSIT_MS = 50
@@ -12,6 +12,8 @@ export const MAX_QUEUE = 500
 export interface RoomStateOptions {
   peerId: PeerId
   name: string
+  /** Clave estable de esta instalación: con ella se reconoce al dueño aunque cambie de peerId. */
+  ownerKey: string
   now: () => number
 }
 
@@ -30,6 +32,7 @@ export class RoomState {
   private readonly latency = new Map<PeerId, number>()
   private readonly listeners = new Set<() => void>()
   private playback: Playback
+  private policy: Policy | undefined
   private lastStateSentAt = Number.NEGATIVE_INFINITY
 
   /** Dos caracteres base62 derivados del peerId; el último nunca es «0» para que el rank siga siendo válido. */
@@ -84,7 +87,29 @@ export class RoomState {
       .join(',')
     const gone = [...this.removed].sort().join(',')
     const stamp = this.playback.stamp
-    return fnv1a(`${live}|${gone}|${stamp.counter}:${stamp.peerId}`)
+    const policy = this.policy === undefined ? '' : `${this.policy.stamp.counter}:${this.policy.stamp.peerId}`
+    return fnv1a(`${live}|${gone}|${stamp.counter}:${stamp.peerId}|${policy}`)
+  }
+
+  getPolicy(): Policy | undefined {
+    return this.policy
+  }
+
+  isOwner(): boolean {
+    return this.policy !== undefined && this.policy.ownerKey === this.opts.ownerKey
+  }
+
+  /** Los bloqueos solo cuentan con el dueño en la sala: si se va, nadie se queda sin poder hacer nada. */
+  private ownerPresent(): boolean {
+    return this.policy !== undefined && (this.isOwner() || this.peers.has(this.policy.ownerPeerId))
+  }
+
+  mayEditQueue(): boolean {
+    return !(this.policy?.lockQueue === true && !this.isOwner() && this.ownerPresent())
+  }
+
+  mayControlPlayback(): boolean {
+    return !(this.policy?.lockPlayback === true && !this.isOwner() && this.ownerPresent())
   }
 
   onChange(listener: () => void): () => void {
@@ -102,6 +127,23 @@ export class RoomState {
 
   heartbeat(relay: boolean): Outgoing[] {
     return [this.hello(relay)]
+  }
+
+  /** Quien crea la sala se hace dueño. Si ya hay dueño no hace nada. */
+  claimRoom(locks: Locks = {}): Outgoing[] {
+    if (this.policy !== undefined) return []
+    return [this.writePolicy({lockQueue: locks.lockQueue ?? false, lockPlayback: locks.lockPlayback ?? false})]
+  }
+
+  /** Solo el dueño. Lo que no se indique se mantiene. */
+  setLocks(locks: Locks): Outgoing[] {
+    if (!this.isOwner() || this.policy === undefined) return []
+    return [
+      this.writePolicy({
+        lockQueue: locks.lockQueue ?? this.policy.lockQueue,
+        lockPlayback: locks.lockPlayback ?? this.policy.lockPlayback
+      })
+    ]
   }
 
   /** Cambia el nombre propio y lo anuncia; las pistas ya añadidas conservan el anterior. */
@@ -138,6 +180,7 @@ export class RoomState {
 
   /** `startIndex`: cuál suena primero si la sala estaba parada (por defecto, la primera añadida). */
   addTracks(metas: VideoMeta[], startIndex = 0): Outgoing[] {
+    if (!this.mayEditQueue()) return []
     const live = this.queue()
     const room = Math.max(0, MAX_QUEUE - live.length)
     const accepted = metas.slice(0, room)
@@ -169,7 +212,7 @@ export class RoomState {
   }
 
   removeTrack(trackId: string): Outgoing[] {
-    if (!this.tracks.has(trackId) || this.removed.has(trackId)) return []
+    if (!this.mayEditQueue() || !this.tracks.has(trackId) || this.removed.has(trackId)) return []
     this.removed.add(trackId)
     const out: Outgoing[] = [{msg: {type: 'remove', from: this.opts.peerId, trackId}, relay: true}]
     const healed = this.healPlayback()
@@ -182,6 +225,7 @@ export class RoomState {
    * (la que quedará detrás; null = final). Vecinos que no estén vivos o estén invertidos: no hace nada.
    */
   moveTrack(trackId: string, beforeId: string | null, afterId: string | null): Outgoing[] {
+    if (!this.mayEditQueue()) return []
     const track = this.liveTrack(trackId)
     if (track === undefined || beforeId === trackId || afterId === trackId) return []
     const before = beforeId === null ? null : this.liveTrack(beforeId)
@@ -229,6 +273,7 @@ export class RoomState {
   }
 
   setPlaying(playing: boolean): Outgoing[] {
+    if (!this.mayControlPlayback()) return []
     const current = this.currentTrack()
     if (current === undefined) {
       const first = this.queue()[0]
@@ -239,16 +284,17 @@ export class RoomState {
 
   seek(positionS: number): Outgoing[] {
     const current = this.currentTrack()
-    if (current === undefined) return []
+    if (current === undefined || !this.mayControlPlayback()) return []
     return this.writePlayback(current.id, this.playback.playing, Math.max(0, positionS))
   }
 
   playTrack(trackId: string): Outgoing[] {
-    if (!this.tracks.has(trackId) || this.removed.has(trackId)) return []
+    if (!this.mayControlPlayback() || !this.tracks.has(trackId) || this.removed.has(trackId)) return []
     return this.writePlayback(trackId, true, 0)
   }
 
   next(): Outgoing[] {
+    if (!this.mayControlPlayback()) return []
     const id = this.playback.trackId
     const following = id === null ? this.queue()[0] : this.nextAfter(id)
     return this.writePlayback(following?.id ?? null, following !== undefined, 0)
@@ -281,6 +327,10 @@ export class RoomState {
     const isNew = known === undefined
     if (msg.type !== 'bye') this.peers.set(msg.from, {name: known?.name ?? '', seenAt: now})
     const out: Outgoing[] = []
+    // Con la sala bloqueada, lo que no venga del dueño no cuenta (el cliente normal ni lo manda).
+    const fromOwner = this.policy !== undefined && msg.from === this.policy.ownerPeerId
+    const queueAllowed = fromOwner || this.policy?.lockQueue !== true || !this.ownerPresent()
+    const playbackAllowed = fromOwner || this.policy?.lockPlayback !== true || !this.ownerPresent()
 
     switch (msg.type) {
       case 'hello': {
@@ -294,18 +344,23 @@ export class RoomState {
       }
       case 'state':
         this.peers.set(msg.from, {name: msg.name, seenAt: now})
+        if (msg.policy !== undefined) out.push(...this.applyPolicy(msg.policy))
         this.mergeTracks(msg.tracks)
         for (const id of msg.removed) this.tombstone(id)
         this.applyPlayback(msg.playback, this.transit(msg.from, via))
         break
+      case 'policy':
+        out.push(...this.applyPolicy(msg.policy))
+        break
       case 'add':
-        this.mergeTracks(msg.tracks)
+        if (queueAllowed) this.mergeTracks(msg.tracks)
         break
       case 'remove':
-        this.tombstone(msg.trackId)
+        if (queueAllowed) this.tombstone(msg.trackId)
         break
       case 'move': {
         this.clock.observe(msg.moved)
+        if (!queueAllowed) break
         const track = this.tracks.get(msg.trackId)
         // Pista aún desconocida: el «state» que la traiga vendrá ya con su rank.
         if (track !== undefined && compareStamps(msg.moved, track.moved) > 0) {
@@ -315,7 +370,7 @@ export class RoomState {
         break
       }
       case 'playback':
-        this.applyPlayback(msg.playback, this.transit(msg.from, via))
+        if (playbackAllowed) this.applyPlayback(msg.playback, this.transit(msg.from, via))
         break
       case 'ping':
         if (msg.to === this.opts.peerId) {
@@ -357,7 +412,7 @@ export class RoomState {
   }
 
   private stateMessage(): RoomMessage {
-    return {
+    const message: RoomMessage = {
       type: 'state',
       from: this.opts.peerId,
       name: this.name,
@@ -365,6 +420,44 @@ export class RoomState {
       removed: [...this.removed].slice(0, MAX_REMOVED),
       playback: this.toWire()
     }
+    if (this.policy !== undefined) message.policy = {...this.policy}
+    return message
+  }
+
+  private writePolicy(locks: {lockQueue: boolean; lockPlayback: boolean}): Outgoing {
+    this.policy = {
+      ownerKey: this.opts.ownerKey,
+      ownerPeerId: this.opts.peerId,
+      ownerName: this.name,
+      lockQueue: locks.lockQueue,
+      lockPlayback: locks.lockPlayback,
+      stamp: this.clock.tick()
+    }
+    this.emit()
+    return {msg: {type: 'policy', from: this.opts.peerId, policy: {...this.policy}}, relay: true}
+  }
+
+  /**
+   * Acepta la primera política que llega y, después, solo las más nuevas del mismo dueño. Si la
+   * política es mía pero con otro peerId (volví a entrar), la reclamo con el peerId actual.
+   */
+  private applyPolicy(wire: Policy): Outgoing[] {
+    this.clock.observe(wire.stamp)
+    const current = this.policy
+    const accept = current === undefined || (wire.ownerKey === current.ownerKey && compareStamps(wire.stamp, current.stamp) > 0)
+    if (!accept) return []
+    this.policy = {
+      ownerKey: wire.ownerKey,
+      ownerPeerId: wire.ownerPeerId,
+      ownerName: wire.ownerName,
+      lockQueue: wire.lockQueue,
+      lockPlayback: wire.lockPlayback,
+      stamp: {counter: wire.stamp.counter, peerId: wire.stamp.peerId}
+    }
+    if (this.isOwner() && wire.ownerPeerId !== this.opts.peerId) {
+      return [this.writePolicy({lockQueue: wire.lockQueue, lockPlayback: wire.lockPlayback})]
+    }
+    return []
   }
 
   private toWire(): PlaybackWire {
@@ -440,7 +533,7 @@ export class RoomState {
   /** Si la pista actual está borrada, pasa a la siguiente (o se detiene). */
   private healPlayback(): Outgoing[] {
     const id = this.playback.trackId
-    if (id === null || !this.removed.has(id)) return []
+    if (id === null || !this.removed.has(id) || !this.mayControlPlayback()) return []
     const following = this.nextAfter(id)
     return this.writePlayback(following?.id ?? null, following !== undefined, 0)
   }

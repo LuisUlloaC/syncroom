@@ -128,6 +128,27 @@ input[type='range'] { width: 100%; min-width: 0; margin: 0; accent-color: var(--
 
 .queue { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
 .queue .hint { color: var(--vscode-descriptionForeground); }
+.queue h3 { align-items: center; gap: 0.5rem; }
+.queue h3 .count { margin-left: 0.3em; }
+.queue .locks { display: flex; gap: 0.25rem; }
+.queue .lock {
+  display: inline-flex; align-items: center; gap: 0.3em;
+  padding: 0.15em 0.5em; border-radius: 1em;
+  font-size: 0.95em; letter-spacing: 0; text-transform: none;
+  background: transparent; color: var(--vscode-descriptionForeground);
+  border-color: var(--vscode-widget-border, var(--vscode-panel-border));
+}
+.queue .lock:hover:not(:disabled) { color: var(--vscode-foreground); background: var(--vscode-toolbar-hoverBackground); }
+.queue .lock.on {
+  background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-color: transparent;
+}
+.queue .locked {
+  display: flex; align-items: center; gap: 0.4em;
+  font-size: 0.9em; color: var(--vscode-descriptionForeground);
+}
+.queue li:not([draggable='true']) .n { cursor: default; }
+.queue li:not([draggable='true']):hover .n .num { display: block; }
+.queue li:not([draggable='true']):hover .n .ico { display: none; }
 .queue ol { display: grid; grid-template-columns: minmax(0, 1fr); margin: 0 -0.9rem; padding: 0; list-style: none; }
 .queue li {
   display: grid; grid-template-columns: 1.6em minmax(0, 1fr) auto; align-items: center; gap: 0.3rem;

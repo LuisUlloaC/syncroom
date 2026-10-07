@@ -47,6 +47,8 @@ function setup(over: Partial<SessionOptions> = {}) {
     code: 'ABCD2345',
     peerId: 'me',
     name: 'Me',
+    ownerKey: 'key-me',
+    claim: false,
     direct: true,
     relays: ['wss://relay.example'],
     volume: 60,
@@ -68,7 +70,7 @@ const sends = (sent: HostToEngine[]): Array<[string, boolean]> =>
   sent.flatMap(m => (m.t === 'send' ? [[m.msg.type, m.relay] as [string, boolean]] : []))
 
 function remotePeer(id: string): RoomState {
-  return new RoomState({peerId: id, name: id.toUpperCase(), now: () => Date.now()})
+  return new RoomState({peerId: id, name: id.toUpperCase(), ownerKey: `key-${id}`, now: () => Date.now()})
 }
 
 beforeEach(() => {
@@ -443,6 +445,61 @@ describe('view', () => {
       {t: 'volume', value: 100},
       {t: 'volume', value: 0}
     ])
+  })
+})
+
+describe('room policy', () => {
+  it('the creator claims the room when the engine is ready, once, with the remembered locks', () => {
+    const {link, session} = setup({claim: true, initialLocks: {lockQueue: true, lockPlayback: false}})
+    expect(session.view().policy).toBeUndefined()
+    link.emit({t: 'ready'})
+    const first = roomMessages(link.take())
+    expect(first.map(m => m.type)).toEqual(['hello', 'policy'])
+    expect(session.view().policy).toEqual({
+      ownerName: 'Me',
+      mine: true,
+      lockQueue: true,
+      lockPlayback: false,
+      canEditQueue: true,
+      canControlPlayback: true
+    })
+    // El motor se reinicia: no se reclama de nuevo.
+    link.emit({t: 'ready'})
+    expect(roomMessages(link.take()).map(m => m.type)).toEqual(['hello'])
+  })
+
+  it('a joiner does not claim and sees the owner’s locks', () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    link.take()
+    const owner = remotePeer('owner')
+    owner.claimRoom()
+    owner.setLocks({lockQueue: true})
+    for (const o of owner.join()) link.emit({t: 'msg', msg: o.msg, via: 'direct'})
+    const state = owner.receive({type: 'hello', from: 'me', name: 'Me', digest: 'x'}, 'direct')
+    for (const o of state) link.emit({t: 'msg', msg: o.msg, via: 'direct'})
+    expect(session.view().policy).toEqual({
+      ownerName: 'OWNER',
+      mine: false,
+      lockQueue: true,
+      lockPlayback: false,
+      canEditQueue: false,
+      canControlPlayback: true
+    })
+    session.setLocks({lockQueue: false})
+    expect(roomMessages(link.take()).map(m => m.type)).not.toContain('policy')
+  })
+
+  it('setLocks by the owner tells the room and reports the change', () => {
+    const {link, session} = setup({claim: true})
+    link.emit({t: 'ready'})
+    link.take()
+    const changed = vi.fn()
+    session.onChange(changed)
+    session.setLocks({lockPlayback: true})
+    expect(roomMessages(link.take()).map(m => m.type)).toEqual(['policy'])
+    expect(session.view().policy).toMatchObject({lockQueue: false, lockPlayback: true, mine: true})
+    expect(changed).toHaveBeenCalled()
   })
 })
 

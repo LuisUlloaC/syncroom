@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- Whoever creates a room owns it and can lock the queue (nobody else adds, removes or reorders) and lock playback (nobody else plays, pauses, seeks or skips), separately, from the queue header. Locks pause while the owner is away and come back when they return.
+
 ## 0.4.1
 
 - Fixed: the chat icon was missing from the package, so the chat view did not appear.

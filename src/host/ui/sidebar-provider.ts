@@ -120,6 +120,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'say':
         this.actions.say(msg.text)
         break
+      case 'locks':
+        this.actions.setLocks(msg.lockQueue === true, msg.lockPlayback === true)
+        break
     }
   }
 

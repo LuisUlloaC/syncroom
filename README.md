@@ -9,6 +9,7 @@ Listen to YouTube together without leaving VS Code. One person creates a room, s
 2. Send the room code to your friends. They choose **Join** and type it.
 3. Paste a YouTube video or playlist link. Anyone in the room can add, reorder, skip, pause or seek.
 4. The chat has its own icon in the activity bar; unread messages show as a badge on it.
+5. Whoever created the room can lock the queue and the playback with the two toggles in the queue header, so only they can change the list or play, pause and skip.
 
 There is no account and no SyncRoom server. Rooms exist only while someone is in them.
 

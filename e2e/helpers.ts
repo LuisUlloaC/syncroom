@@ -37,6 +37,8 @@ export interface PeerOptions {
   extraArgs?: string[]
   /** Lo que devuelve cada addLink; por defecto, VIDEO. */
   videos?: VideoMeta[]
+  /** true = crea la sala y se hace dueño. */
+  claim?: boolean
 }
 
 export async function startPeer(options: PeerOptions): Promise<TestPeer> {
@@ -55,6 +57,8 @@ export async function startPeer(options: PeerOptions): Promise<TestPeer> {
     code: options.code,
     peerId: generatePeerId(),
     name: options.name,
+    ownerKey: generatePeerId(),
+    claim: options.claim ?? false,
     direct: options.direct,
     relays: DEFAULT_RELAYS,
     volume: 0,

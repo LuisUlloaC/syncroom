@@ -11,10 +11,12 @@ const wire = {trackId: 'a:1', playing: true, positionS: 3, ageMs: 10, stamp}
 describe('isRoomMessage', () => {
   it('accepts every message a real RoomState produces', () => {
     const clock = {t: 1000}
-    const a = new RoomState({peerId: 'a', name: 'Ana', now: () => clock.t})
-    const b = new RoomState({peerId: 'b', name: 'Leo', now: () => clock.t})
+    const a = new RoomState({peerId: 'a', name: 'Ana', ownerKey: 'ka', now: () => clock.t})
+    const b = new RoomState({peerId: 'b', name: 'Leo', ownerKey: 'kb', now: () => clock.t})
     const produced = [
       ...a.join(),
+      ...a.claimRoom(),
+      ...a.setLocks({lockQueue: true}),
       ...a.addTracks([meta]),
       ...a.seek(5),
       ...a.addTracks([{...meta, videoId: 'bbbbbbbbbbb'}]),
@@ -71,6 +73,11 @@ describe('isRoomMessage', () => {
     ['track with rank "0"', {type: 'add', from: 'a', tracks: [{...track, rank: '0'}]}],
     ['move with rank "zz"', {type: 'move', from: 'a', trackId: 'a:1', rank: 'zz', moved: {counter: 2, peerId: 'a'}}],
     ['chat with only spaces', {type: 'chat', from: 'a', name: 'Ana', id: 'a:9', text: '   '}],
+    ['policy without stamp', {type: 'policy', from: 'a', policy: {ownerKey: 'k', ownerPeerId: 'a', ownerName: 'A', lockQueue: false, lockPlayback: false}}],
+    ['policy with string lock', {type: 'policy', from: 'a', policy: {ownerKey: 'k', ownerPeerId: 'a', ownerName: 'A', lockQueue: 'yes', lockPlayback: false, stamp}}],
+    ['policy with empty owner key', {type: 'policy', from: 'a', policy: {ownerKey: '', ownerPeerId: 'a', ownerName: 'A', lockQueue: false, lockPlayback: false, stamp}}],
+    ['policy with long owner name', {type: 'policy', from: 'a', policy: {ownerKey: 'k', ownerPeerId: 'a', ownerName: 'x'.repeat(41), lockQueue: false, lockPlayback: false, stamp}}],
+    ['state with bad policy', {type: 'state', from: 'a', name: 'Ana', tracks: [], removed: [], playback: wire, policy: {ownerKey: 'k'}}],
     ['track with huge rank', {type: 'add', from: 'a', tracks: [{...track, rank: 'a'.repeat(257)}]}],
     ['move without rank', {type: 'move', from: 'a', trackId: 'a:1', moved: {counter: 2, peerId: 'a'}}],
     ['move with empty rank', {type: 'move', from: 'a', trackId: 'a:1', rank: '', moved: {counter: 2, peerId: 'a'}}],

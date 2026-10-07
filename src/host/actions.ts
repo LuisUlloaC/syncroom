@@ -98,6 +98,10 @@ export class Actions {
     this.controller.session?.say(text)
   }
 
+  setLocks(lockQueue: boolean, lockPlayback: boolean): void {
+    this.controller.setLocks({lockQueue, lockPlayback})
+  }
+
   seek(positionS: number): void {
     if (Number.isFinite(positionS)) this.controller.session?.seek(positionS)
   }

@@ -13,8 +13,8 @@ interface Clock {
   t: number
 }
 
-function peer(id: string, clock: Clock): RoomState {
-  return new RoomState({peerId: id, name: id.toUpperCase(), now: () => clock.t})
+function peer(id: string, clock: Clock, ownerKey = `key-${id}`): RoomState {
+  return new RoomState({peerId: id, name: id.toUpperCase(), ownerKey, now: () => clock.t})
 }
 
 /** Entrega mensajes en ambos sentidos hasta que nadie tenga nada más que decir. */
@@ -491,6 +491,127 @@ describe('renaming', () => {
     // Lo que se añada a partir de ahora lleva el nombre nuevo; lo anterior no cambia.
     a.addTracks([meta(1)])
     expect(a.queue()[0]?.addedBy).toBe('Ana')
+  })
+})
+
+describe('room policy (owner and locks)', () => {
+  const ids = (s: RoomState): string[] => s.queue().map(t => t.videoId)
+
+  function ownedRoom() {
+    const clock = {t: 1000}
+    const a = peer('a', clock)
+    const b = peer('b', clock)
+    const claim = a.claimRoom()
+    expect(claim.map(o => [o.msg.type, o.relay])).toEqual([['policy', true]])
+    settle(a, b, b.join(), [...a.join(), ...claim])
+    settle(a, b, [], a.addTracks([meta(1), meta(2), meta(3)]))
+    return {clock, a, b}
+  }
+
+  it('the creator owns the room and newcomers learn it through state', () => {
+    const {a, b} = ownedRoom()
+    expect(a.isOwner()).toBe(true)
+    expect(b.isOwner()).toBe(false)
+    expect(b.getPolicy()).toMatchObject({ownerPeerId: 'a', ownerName: 'A', lockQueue: false, lockPlayback: false})
+    expect(a.mayEditQueue()).toBe(true)
+    expect(b.mayEditQueue()).toBe(true)
+  })
+
+  it('only the owner can change the locks, and everyone sees them', () => {
+    const {a, b} = ownedRoom()
+    expect(b.setLocks({lockQueue: true})).toEqual([])
+    const out = a.setLocks({lockQueue: true})
+    expect(out.map(o => o.msg.type)).toEqual(['policy'])
+    settle(a, b, [], out)
+    expect(b.getPolicy()?.lockQueue).toBe(true)
+    expect(b.mayEditQueue()).toBe(false)
+    expect(b.mayControlPlayback()).toBe(true)
+    settle(a, b, [], a.setLocks({lockQueue: false, lockPlayback: true}))
+    expect(b.getPolicy()).toMatchObject({lockQueue: false, lockPlayback: true})
+  })
+
+  it('a locked queue blocks the others locally and on the wire', () => {
+    const {a, b} = ownedRoom()
+    settle(a, b, [], a.setLocks({lockQueue: true}))
+    const [t1, t2] = b.queue().map(t => t.id) as [string, string]
+    expect(b.addTracks([meta(9)])).toEqual([])
+    expect(b.removeTrack(t1)).toEqual([])
+    expect(b.moveTrack(t2, null, t1)).toEqual([])
+    expect(b.playNext(t2)).toEqual([])
+    expect(ids(b)).toEqual(ids(a))
+    // Un cliente alterado manda igualmente los mensajes: el dueño y el resto los ignoran.
+    const z = peer('z', {t: 1000})
+    for (const o of z.addTracks([meta(9)])) a.receive(o.msg, 'relay')
+    a.receive({type: 'remove', from: 'z', trackId: t1}, 'relay')
+    a.receive({type: 'move', from: 'z', trackId: t2, rank: 'Zz', moved: {counter: 99, peerId: 'z'}}, 'relay')
+    expect(ids(a)).toEqual([meta(1).videoId, meta(2).videoId, meta(3).videoId])
+    // El dueño sigue pudiendo.
+    expect(a.removeTrack(t1).map(o => o.msg.type)).toEqual(['remove', 'playback'])
+  })
+
+  it('locked playback blocks play, pause, seek, skip and auto-advance for the others', () => {
+    const {a, b} = ownedRoom()
+    settle(a, b, [], a.setLocks({lockPlayback: true}))
+    const t3 = b.queue()[2]?.id ?? ''
+    expect(b.setPlaying(false)).toEqual([])
+    expect(b.seek(30)).toEqual([])
+    expect(b.next()).toEqual([])
+    expect(b.playTrack(t3)).toEqual([])
+    expect(b.trackEnded(b.currentTrack()?.id ?? '')).toEqual([])
+    expect(b.getPlayback().playing).toBe(true)
+    const before = a.getPlayback().stamp
+    a.receive({type: 'playback', from: 'z', playback: {trackId: null, playing: false, positionS: 0, ageMs: 0, stamp: {counter: 99, peerId: 'z'}}}, 'relay')
+    expect(a.getPlayback().stamp).toEqual(before)
+    // La cola sigue abierta.
+    expect(b.addTracks([meta(9)]).map(o => o.msg.type)).toEqual(['add'])
+    // El dueño salta y todos lo siguen.
+    settle(a, b, [], a.next())
+    expect(b.currentTrack()?.videoId).toBe(meta(2).videoId)
+  })
+
+  it('locks are suspended while the owner is away, so the room never stalls', () => {
+    const {clock, a, b} = ownedRoom()
+    settle(a, b, [], a.setLocks({lockQueue: true, lockPlayback: true}))
+    expect(b.mayEditQueue()).toBe(false)
+    for (const o of a.leave()) b.receive(o.msg, 'relay')
+    expect(b.mayEditQueue()).toBe(true)
+    expect(b.mayControlPlayback()).toBe(true)
+    expect(b.addTracks([meta(9)]).map(o => o.msg.type)).toEqual(['add'])
+    // Vuelve (misma clave, otro peerId): recupera la sala y los bloqueos siguen en pie.
+    const a2 = peer('a2', clock, 'key-a')
+    const reply = a2.join().flatMap(o => b.receive(o.msg, 'direct'))
+    expect(reply.map(o => o.msg.type)).toEqual(['state'])
+    const reclaim = reply.flatMap(o => a2.receive(o.msg, 'direct'))
+    expect(reclaim.map(o => o.msg.type)).toEqual(['policy'])
+    expect(a2.isOwner()).toBe(true)
+    for (const o of reclaim) b.receive(o.msg, 'direct')
+    expect(b.getPolicy()).toMatchObject({ownerPeerId: 'a2', lockQueue: true, lockPlayback: true})
+    expect(b.mayEditQueue()).toBe(false)
+  })
+
+  it('ignores a policy from someone who is not the owner', () => {
+    const {a, b} = ownedRoom()
+    const stamp = {counter: 500, peerId: 'z'}
+    b.receive({type: 'policy', from: 'z', policy: {ownerKey: 'key-z', ownerPeerId: 'z', ownerName: 'Z', lockQueue: true, lockPlayback: true, stamp}}, 'relay')
+    expect(b.getPolicy()?.ownerKey).toBe('key-a')
+    expect(b.getPolicy()?.lockQueue).toBe(false)
+    expect(a.getPolicy()?.ownerKey).toBe('key-a')
+  })
+
+  it('a room nobody claimed has no policy and no locks', () => {
+    const clock = {t: 1000}
+    const a = peer('a', clock)
+    expect(a.getPolicy()).toBeUndefined()
+    expect(a.isOwner()).toBe(false)
+    expect(a.mayEditQueue()).toBe(true)
+    expect(a.mayControlPlayback()).toBe(true)
+  })
+
+  it('a changed policy shows in the digest, so a lost policy message is repaired by the next state', () => {
+    const {a, b} = ownedRoom()
+    const before = b.digest()
+    a.setLocks({lockQueue: true})
+    expect(a.digest()).not.toBe(before)
   })
 })
 

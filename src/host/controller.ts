@@ -4,6 +4,7 @@ import {join} from 'node:path'
 import * as vscode from 'vscode'
 import {generatePeerId, generateRoomCode} from '../core/ids'
 import {DEFAULT_RELAYS} from '../protocol/defaults'
+import type {Locks} from '../core/types'
 import type {ViewState} from '../protocol/webview'
 import {resolveLink} from '../resolve/youtube'
 import {BridgeServer} from './bridge-server'
@@ -53,16 +54,36 @@ export class RoomController implements vscode.Disposable {
     return {inRoom: true, room: room.session.view(), playerVisible: room.visible}
   }
 
-  /** Entra en la sala `code`, o crea una nueva si no se da código. */
+  /** Entra en la sala `code`, o crea una nueva (y se hace dueño) si no se da código. */
   async enter(code?: string): Promise<void> {
     if (this.busy) return
     this.busy = true
     try {
       await this.leave()
-      await this.open(code ?? generateRoomCode())
+      await this.open(code ?? generateRoomCode(), code === undefined)
     } finally {
       this.busy = false
     }
+  }
+
+  /** Bloqueos de la sala (solo el dueño); se recuerdan para la próxima sala que cree. */
+  setLocks(locks: Locks): void {
+    const session = this.active?.session
+    if (session === undefined) return
+    session.setLocks(locks)
+    const policy = session.view().policy
+    if (policy?.mine === true) {
+      void this.context.globalState.update('locks', {lockQueue: policy.lockQueue, lockPlayback: policy.lockPlayback})
+    }
+  }
+
+  /** Clave estable de esta instalación: con ella se reconoce al dueño aunque salga y vuelva. */
+  private ownerKey(): string {
+    const saved = this.context.globalState.get<string>('ownerKey')
+    if (saved !== undefined && saved !== '') return saved
+    const fresh = generatePeerId()
+    void this.context.globalState.update('ownerKey', fresh)
+    return fresh
   }
 
   async leave(): Promise<void> {
@@ -129,7 +150,7 @@ export class RoomController implements vscode.Disposable {
     this.output.appendLine(`${new Date().toISOString().slice(11, 19)} ${text}`)
   }
 
-  private async open(code: string): Promise<void> {
+  private async open(code: string, claim: boolean): Promise<void> {
     const config = vscode.workspace.getConfiguration('syncroom')
     const configured = config.get<string>('browserPath', '').trim()
     const browser = await locateBrowser({configured})
@@ -149,6 +170,9 @@ export class RoomController implements vscode.Disposable {
       code,
       peerId: generatePeerId(),
       name,
+      ownerKey: this.ownerKey(),
+      claim,
+      initialLocks: this.context.globalState.get<Locks>('locks', {}),
       direct: config.get<boolean>('directConnections', true),
       relays: config.get<string[]>('relays', DEFAULT_RELAYS),
       volume: this.context.globalState.get<number>('volume', DEFAULT_VOLUME),
