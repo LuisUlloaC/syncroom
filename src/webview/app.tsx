@@ -2,6 +2,7 @@ import {useEffect, useRef, useState} from 'preact/hooks'
 import {formatRoomCode} from '../core/ids'
 import type {ChatLine, RoomView, TrackView} from '../host/session'
 import type {HostToWebview, ViewState, WebviewToHost} from '../protocol/webview'
+import {unreadSince} from './chat-unread'
 import {clock, thumbnail} from './format'
 import {Icon} from './icons'
 
@@ -159,32 +160,45 @@ function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
 /** El nombre propio: clic para editarlo en el sitio; Enter o salir guarda, Escape cancela. */
 function MyName({name}: {name: string}) {
   const [draft, setDraft] = useState<string | undefined>(undefined)
-  if (draft === undefined) {
+  const editing = draft !== undefined
+  if (!editing) {
     return (
       <button class="me" onClick={() => setDraft(name)} title={s('room.rename')}>
         {name} ({s('room.you')})
       </button>
     )
   }
-  const save = (): void => {
+  return <NameEditor initial={draft} current={name} onDone={() => setDraft(undefined)} />
+}
+
+/** El cuadro de edición: Enter o salir guarda, Escape cancela. Se enfoca una sola vez, al aparecer. */
+function NameEditor({initial, current, onDone}: {initial: string; current: string; onDone: () => void}) {
+  const [draft, setDraft] = useState(initial)
+  const input = useRef<HTMLInputElement>(null)
+  // Al quitar el input del DOM Chromium puede disparar blur: esta bandera evita guardar dos veces o tras Escape.
+  const settled = useRef(false)
+  useEffect(() => input.current?.focus(), [])
+  const finish = (save: boolean): void => {
+    if (settled.current) return
+    settled.current = true
     const clean = draft.trim()
-    if (clean !== '' && clean !== name) post({t: 'rename', name: clean})
-    setDraft(undefined)
+    if (save && clean !== '' && clean !== current) post({t: 'rename', name: clean})
+    onDone()
   }
   return (
     <input
+      ref={input}
       class="me"
       value={draft}
       maxLength={40}
       aria-label={s('room.rename')}
       spellcheck={false}
       autocomplete="off"
-      ref={el => el?.focus()}
       onInput={event => setDraft(event.currentTarget.value)}
-      onBlur={save}
+      onBlur={() => finish(true)}
       onKeyDown={event => {
-        if (event.key === 'Enter') save()
-        if (event.key === 'Escape') setDraft(undefined)
+        if (event.key === 'Enter') finish(true)
+        if (event.key === 'Escape') finish(false)
       }}
     />
   )
@@ -347,22 +361,24 @@ const time = (at: number): string => new Date(at).toLocaleTimeString([], {hour: 
 function Chat({lines}: {lines: ChatLine[]}) {
   const [open, setOpen] = useState<boolean>(() => vscode.getState()?.chatOpen ?? true)
   const [text, setText] = useState('')
-  // Cuántas líneas había la última vez que el panel estuvo abierto: lo que llegue después cuenta como no leído.
-  const [seen, setSeen] = useState(lines.length)
+  const lastId = lines.at(-1)?.id
+  // Última línea vista con el panel abierto: lo que llegue después cuenta como no leído.
+  // Se guarda el id, no la cuenta: con el tope de 200 la cuenta deja de crecer.
+  const [seenId, setSeenId] = useState(lastId)
   const list = useRef<HTMLOListElement>(null)
   const stuck = useRef(true)
 
   useEffect(() => {
     vscode.setState({...vscode.getState(), chatOpen: open})
-    if (open) setSeen(lines.length)
-  }, [open, lines.length])
+    if (open) setSeenId(lastId)
+  }, [open, lastId])
 
   useEffect(() => {
     const el = list.current
     if (el !== null && stuck.current) el.scrollTop = el.scrollHeight
-  }, [lines.length, open])
+  }, [lastId, open])
 
-  const unread = open ? 0 : lines.slice(seen).filter(line => line.kind === 'message' && !line.mine).length
+  const unread = open ? 0 : unreadSince(lines, seenId)
 
   const send = (): void => {
     const clean = text.trim()

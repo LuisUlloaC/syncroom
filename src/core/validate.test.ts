@@ -31,6 +31,10 @@ describe('isRoomMessage', () => {
     expect(isRoomMessage(JSON.parse(JSON.stringify(produced[0]?.msg)))).toBe(true)
   })
 
+  it.each(['a0', 'a0V', 'Zz', 'a1Xy', 'b00001'])('accepts rank %s', rank => {
+    expect(isRoomMessage({type: 'move', from: 'a', trackId: 'a:1', rank, moved: {counter: 2, peerId: 'a'}})).toBe(true)
+  })
+
   it('accepts playback with no track', () => {
     expect(isRoomMessage({type: 'playback', from: 'a', playback: {...wire, trackId: null}})).toBe(true)
   })
@@ -61,6 +65,12 @@ describe('isRoomMessage', () => {
     ['chat with long name', {type: 'chat', from: 'a', name: 'x'.repeat(41), id: 'a:9', text: 'hi'}],
     ['track without rank', {type: 'add', from: 'a', tracks: [{...track, rank: undefined}]}],
     ['track with non-base62 rank', {type: 'add', from: 'a', tracks: [{...track, rank: 'a0/..'}]}],
+    ['track with rank "zz" (bad integer part)', {type: 'add', from: 'a', tracks: [{...track, rank: 'zz'}]}],
+    ['track with rank "a" (too short)', {type: 'add', from: 'a', tracks: [{...track, rank: 'a'}]}],
+    ['track with rank "a00" (trailing zero)', {type: 'add', from: 'a', tracks: [{...track, rank: 'a00'}]}],
+    ['track with rank "0"', {type: 'add', from: 'a', tracks: [{...track, rank: '0'}]}],
+    ['move with rank "zz"', {type: 'move', from: 'a', trackId: 'a:1', rank: 'zz', moved: {counter: 2, peerId: 'a'}}],
+    ['chat with only spaces', {type: 'chat', from: 'a', name: 'Ana', id: 'a:9', text: '   '}],
     ['track with huge rank', {type: 'add', from: 'a', tracks: [{...track, rank: 'a'.repeat(257)}]}],
     ['move without rank', {type: 'move', from: 'a', trackId: 'a:1', moved: {counter: 2, peerId: 'a'}}],
     ['move with empty rank', {type: 'move', from: 'a', trackId: 'a:1', rank: '', moved: {counter: 2, peerId: 'a'}}],

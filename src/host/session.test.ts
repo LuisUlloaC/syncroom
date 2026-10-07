@@ -537,6 +537,13 @@ describe('chat', () => {
     expect(lines(session).map(l => l[0])).toEqual(['joined', 'left'])
   })
 
+  it('say before the engine is ready does nothing (nothing could be sent)', () => {
+    const {link, session} = setup()
+    session.say('hola')
+    expect(session.view().chat).toEqual([])
+    expect(link.take()).toEqual([])
+  })
+
   it('keeps only the last 200 lines', () => {
     const {link, session} = setup()
     link.emit({t: 'ready'})

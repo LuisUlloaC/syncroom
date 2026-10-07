@@ -243,7 +243,8 @@ export class RoomSession {
   /** Manda un mensaje de chat (recortado y acotado a 500 caracteres); vacío se ignora. */
   say(text: string): void {
     const clean = text.trim().slice(0, MAX_CHAT)
-    if (clean === '') return
+    // Sin motor no hay red: no se finge que salió.
+    if (clean === '' || !this.engineReady) return
     const out = this.state.chatMessage(clean)
     const id = out.msg.type === 'chat' ? out.msg.id : `${this.opts.peerId}:${this.chatSeq}`
     this.pushChat({id, kind: 'message', from: this.opts.peerId, name: this.name, text: clean, at: this.now(), mine: true})

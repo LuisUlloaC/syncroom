@@ -1,3 +1,4 @@
+import {generateKeyBetween} from 'fractional-indexing'
 import {MAX_COUNTER} from './stamp'
 import type {PlaybackWire, RoomMessage, Stamp, Track} from './types'
 
@@ -32,8 +33,15 @@ function isNumberIn(value: unknown, min: number, max: number): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
 }
 
+/** Un rank válido para fractional-indexing: si no lo es, cualquier generación posterior lanzaría. */
 function isRank(value: unknown): value is string {
-  return isText(value, MAX_RANK) && RANK.test(value)
+  if (!isText(value, MAX_RANK) || !RANK.test(value)) return false
+  try {
+    generateKeyBetween(value, null)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function isStamp(value: unknown): value is Stamp {
@@ -92,7 +100,7 @@ export function isRoomMessage(value: unknown): value is RoomMessage {
     case 'move':
       return isId(value.trackId) && isRank(value.rank) && isStamp(value.moved)
     case 'chat':
-      return isText(value.name, MAX_NAME) && isId(value.id) && isText(value.text, MAX_CHAT) && value.text.length > 0
+      return isText(value.name, MAX_NAME) && isId(value.id) && isText(value.text, MAX_CHAT) && value.text.trim().length > 0
     case 'playback':
       return isPlaybackWire(value.playback)
     case 'ping':

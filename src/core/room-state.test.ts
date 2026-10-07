@@ -199,6 +199,69 @@ describe('reordering', () => {
     expect(ids(b)[0]).toBe(meta(2).videoId)
   })
 
+  it('a move that arrived before its add is repaired by the next heartbeat (digest covers ranks)', () => {
+    const clock = {t: 1000}
+    const a = peer('a', clock)
+    const b = peer('b', clock)
+    const c = peer('c', clock)
+    const add = a.addTracks([meta(1), meta(2)])
+    for (const o of add) b.receive(o.msg, 'direct')
+    const [t1, t2] = a.queue().map(t => t.id) as [string, string]
+    const move = b.moveTrack(t2, null, t1)
+    for (const o of move) a.receive(o.msg, 'direct')
+    // c recibe el move antes que el add: el move se ignora y c se queda con el orden viejo.
+    for (const o of move) c.receive(o.msg, 'relay')
+    for (const o of add) c.receive(o.msg, 'relay')
+    expect(a.queue().map(t => t.id)).toEqual([t2, t1])
+    expect(c.queue().map(t => t.id)).toEqual([t1, t2])
+    expect(c.digest()).not.toBe(a.digest())
+    // a ya conoce a c (por un ping); el siguiente latido de c trae una huella distinta y a responde con su state.
+    a.receive({type: 'ping', from: 'c', to: 'a', t0: 1}, 'direct')
+    clock.t += 10_000
+    const reply = c.heartbeat(false).flatMap(o => a.receive(o.msg, 'direct'))
+    expect(reply.map(o => o.msg.type)).toEqual(['state'])
+    for (const o of reply) c.receive(o.msg, 'direct')
+    expect(c.queue().map(t => t.id)).toEqual([t2, t1])
+    expect(c.digest()).toBe(a.digest())
+  })
+
+  it('concurrent adds from different peers never tie on rank', () => {
+    const clock = {t: 1000}
+    const a = peer('a', clock)
+    const b = peer('b', clock)
+    settle(a, b, b.join(), a.join())
+    const fromA = a.addTracks([meta(1)])
+    const fromB = b.addTracks([meta(2)])
+    settle(a, b, fromB, fromA)
+    const ranks = a.queue().map(t => t.rank)
+    expect(new Set(ranks).size).toBe(2)
+    expect(a.queue().map(t => t.id)).toEqual(b.queue().map(t => t.id))
+    // Y se puede soltar algo entre las dos.
+    const [x, y] = a.queue().map(t => t.id) as [string, string]
+    const out = a.addTracks([meta(3)])
+    settle(a, b, [], out)
+    const z = a.queue()[2]?.id ?? ''
+    const move = a.moveTrack(z, x, y)
+    expect(move).toHaveLength(1)
+    settle(a, b, [], move)
+    expect(a.queue().map(t => t.id)).toEqual([x, z, y])
+    expect(b.queue().map(t => t.id)).toEqual([x, z, y])
+  })
+
+  it('dropping between two tracks that tie on rank still works (the second one is nudged)', () => {
+    const clock = {t: 1000}
+    const a = peer('a', clock)
+    a.addTracks([meta(1), meta(3)])
+    const [t1, t3] = a.queue() as [import('./types').Track, import('./types').Track]
+    // Una pista ajena con exactamente el mismo rank que t1 (puede pasar con participantes antiguos u hostiles).
+    a.receive({type: 'add', from: 'z', tracks: [{...t1, id: 'z:1', videoId: meta(2).videoId, addedBy: 'Z', order: {counter: 1, peerId: 'z'}, moved: {counter: 1, peerId: 'z'}}]}, 'relay')
+    expect(a.queue().map(t => t.id)).toEqual([t1.id, 'z:1', t3.id])
+    const out = a.moveTrack(t3.id, t1.id, 'z:1')
+    expect(out.map(o => o.msg.type)).toEqual(['move', 'move'])
+    expect(a.queue().map(t => t.id)).toEqual([t1.id, t3.id, 'z:1'])
+    expect(new Set(a.queue().map(t => t.rank)).size).toBe(3)
+  })
+
   it('a newcomer sees the moved order through state', () => {
     const clock = {t: 1000}
     const a = peer('a', clock)

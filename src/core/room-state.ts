@@ -32,9 +32,13 @@ export class RoomState {
   private playback: Playback
   private lastStateSentAt = Number.NEGATIVE_INFINITY
 
+  /** Dos caracteres base62 derivados del peerId; el último nunca es «0» para que el rank siga siendo válido. */
+  private readonly rankSuffix: string
+
   constructor(private readonly opts: RoomStateOptions) {
     this.clock = new LamportClock(opts.peerId)
     this.name = opts.name
+    this.rankSuffix = rankSuffixFor(opts.peerId)
     this.playback = {trackId: null, playing: false, positionS: 0, anchorAt: opts.now(), stamp: ZERO_STAMP}
   }
 
@@ -73,8 +77,9 @@ export class RoomState {
   }
 
   digest(): string {
+    // Con el rank: así un move perdido también hace diferir las huellas y provoca un state.
     const live = this.queue()
-      .map(track => track.id)
+      .map(track => `${track.id}@${track.rank}`)
       .sort()
       .join(',')
     const gone = [...this.removed].sort().join(',')
@@ -136,7 +141,8 @@ export class RoomState {
     const live = this.queue()
     const room = Math.max(0, MAX_QUEUE - live.length)
     const accepted = metas.slice(0, room)
-    const ranks = generateNKeysBetween(live.at(-1)?.rank ?? null, null, accepted.length)
+    // Sufijo propio por participante: dos que añaden a la vez no empatan en rank.
+    const ranks = generateNKeysBetween(live.at(-1)?.rank ?? null, null, accepted.length).map(rank => rank + this.rankSuffix)
     const added: Track[] = []
     for (const [i, meta] of accepted.entries()) {
       const order = this.clock.tick()
@@ -155,7 +161,8 @@ export class RoomState {
     }
     const first = added[startIndex] ?? added[0]
     if (first === undefined) return []
-    const out: Outgoing[] = [{msg: {type: 'add', from: this.opts.peerId, tracks: added}, relay: true}]
+    // Copias: lo que sale es una instantánea, no los objetos vivos que un move posterior cambiaría.
+    const out: Outgoing[] = [{msg: {type: 'add', from: this.opts.peerId, tracks: added.map(track => ({...track}))}, relay: true}]
     if (this.currentTrack() === undefined) out.push(...this.writePlayback(first.id, true, 0))
     else this.emit()
     return out
@@ -181,18 +188,27 @@ export class RoomState {
     const after = afterId === null ? null : this.liveTrack(afterId)
     if (before === undefined || after === undefined) return []
     const lower = before?.rank ?? null
-    const upper = after?.rank ?? null
-    if (lower !== null && upper !== null && lower >= upper) return []
-    let rank: string
-    try {
-      rank = generateKeyBetween(lower, upper)
-    } catch {
-      return []
+    let upper = after?.rank ?? null
+    if (lower !== null && upper !== null && lower > upper) return []
+    // Vecinos empatados en rank (participantes antiguos u hostiles): se usa el siguiente rank mayor
+    // como techo y se empuja también a `after`, para que la movida quede de verdad entre los dos.
+    const tied = lower !== null && upper !== null && lower === upper
+    if (tied) upper = this.queue().find(t => t.id !== trackId && t.rank > lower)?.rank ?? null
+    const moves: Outgoing[] = []
+    const place = (target: Track, lo: string | null, hi: string | null): boolean => {
+      try {
+        target.rank = generateKeyBetween(lo, hi)
+      } catch {
+        return false
+      }
+      target.moved = this.clock.tick()
+      moves.push({msg: {type: 'move', from: this.opts.peerId, trackId: target.id, rank: target.rank, moved: target.moved}, relay: true})
+      return true
     }
-    track.rank = rank
-    track.moved = this.clock.tick()
+    if (!place(track, lower, upper)) return []
+    if (tied && after !== null && after !== undefined) place(after, track.rank, upper)
     this.emit()
-    return [{msg: {type: 'move', from: this.opts.peerId, trackId, rank, moved: track.moved}, relay: true}]
+    return moves
   }
 
   /** Pone la pista justo detrás de la que suena (o la primera, si no suena nada). */
@@ -341,7 +357,7 @@ export class RoomState {
       type: 'state',
       from: this.opts.peerId,
       name: this.name,
-      tracks: this.queue(),
+      tracks: this.queue().map(track => ({...track})),
       removed: [...this.removed].slice(0, MAX_REMOVED),
       playback: this.toWire()
     }
@@ -440,6 +456,16 @@ export class RoomState {
   private emit(): void {
     for (const listener of this.listeners) listener()
   }
+}
+
+const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+
+function rankSuffixFor(peerId: PeerId): string {
+  const hash = parseInt(fnv1a(peerId), 16) >>> 0
+  const first = BASE62[hash % 62] ?? 'A'
+  // Nunca «0» al final: fractional-indexing lo prohíbe.
+  const last = BASE62[1 + (Math.floor(hash / 62) % 61)] ?? 'A'
+  return first + last
 }
 
 function compareTracks(a: Track, b: Track): number {
