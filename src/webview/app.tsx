@@ -415,8 +415,20 @@ function Chat({lines}: {lines: ChatLine[]}) {
   const [text, setText] = useState('')
   const lastKey = lines.at(-1)?.key
   const list = useRef<HTMLOListElement>(null)
+  const input = useRef<HTMLInputElement>(null)
   // Si el usuario está al fondo, cada línea nueva baja la lista; si subió a leer, se respeta.
   const stuck = useRef(true)
+
+  // El foco solo se toma cuando VS Code se lo da a esta vista (al abrirla), nunca por un repintado:
+  // la vista se repinta cada segundo y robaría el foco a quien escribe en otro sitio (p. ej. el commit).
+  useEffect(() => {
+    const grab = (): void => {
+      if (document.activeElement === document.body) input.current?.focus()
+    }
+    if (document.hasFocus()) grab()
+    window.addEventListener('focus', grab)
+    return () => window.removeEventListener('focus', grab)
+  }, [])
 
   useEffect(() => {
     const el = list.current
@@ -473,10 +485,7 @@ function Chat({lines}: {lines: ChatLine[]}) {
           placeholder={s('chat.placeholder')}
           aria-label={s('chat.placeholder')}
           autocomplete="off"
-          ref={el => {
-            // Al abrir la vista, el cursor ya está en la caja.
-            if (el !== null && document.activeElement === document.body) el.focus()
-          }}
+          ref={input}
           onInput={event => setText(event.currentTarget.value)}
         />
         <button type="submit" class="icon" disabled={text.trim() === ''} title={s('chat.send')} aria-label={s('chat.send')}>
