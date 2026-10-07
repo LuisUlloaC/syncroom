@@ -4,6 +4,7 @@
 !dist/webview/webview.js
 !dist/webview/webview.css
 !media/syncroom.svg
+!media/syncroom-chat.svg
 !media/icon.png
 !l10n/**
 !package.json

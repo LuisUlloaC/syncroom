@@ -1,3 +1,4 @@
+import {execFileSync} from 'node:child_process'
 import {readFileSync, readdirSync} from 'node:fs'
 import {join} from 'node:path'
 import {describe, expect, it} from 'vitest'
@@ -31,7 +32,9 @@ function translatable(): string[] {
 const placeholders = (text: string): string[] => [...text.matchAll(/\{\d+\}/g)].map(m => m[0]).sort()
 
 interface Manifest {
+  icon?: string
   contributes: {
+    viewsContainers: {activitybar: Array<{id: string; icon: string}>}
     commands: Array<{command: string; title: string}>
     configuration: {properties: Record<string, {scope?: string; default?: unknown}>}
   }
@@ -93,6 +96,18 @@ describe('manifest', () => {
       expect(manifest.contributes.configuration.properties[key]?.scope, key).toBe('application')
     }
   })
+
+  it('packages every file the manifest points at (icons live outside dist and are easy to leave out)', () => {
+    const referenced = [
+      String(manifest.icon),
+      ...manifest.contributes.viewsContainers.activitybar.map(c => c.icon)
+    ]
+    expect(referenced.length).toBeGreaterThanOrEqual(3)
+    const packaged = execFileSync('pnpm', ['exec', 'vsce', 'ls', '--no-dependencies'], {cwd: root, encoding: 'utf8', shell: true})
+      .split(/\r?\n/)
+      .map(line => line.trim())
+    for (const file of referenced) expect(packaged, `${file} is not in the .vsix: check .vscodeignore`).toContain(file)
+  }, 60_000)
 
   it('ships the tested relays as the default', () => {
     expect(manifest.contributes.configuration.properties['syncroom.relays']?.default).toEqual(DEFAULT_RELAYS)

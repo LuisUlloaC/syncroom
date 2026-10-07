@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- Fixed: the chat icon was missing from the package, so the chat view did not appear.
+
 ## 0.4.0
 
 - The chat has its own icon in the activity bar, with a badge for unread messages. It no longer sits under the queue.
