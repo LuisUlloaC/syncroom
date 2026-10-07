@@ -20,3 +20,4 @@ export type WebviewToHost =
   | {t: 'volume'; value: number}
   | {t: 'copyCode'}
   | {t: 'togglePlayer'}
+  | {t: 'rename'; name: string}

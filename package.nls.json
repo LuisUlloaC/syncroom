@@ -8,6 +8,7 @@
   "command.next": "Next Track",
   "command.togglePlayer": "Show or Hide Player Window",
   "command.copyCode": "Copy Room Code",
+  "command.changeName": "Change Name…",
   "command.showLog": "Show Log",
   "view.name": "Room",
   "config.displayName": "Name shown to the other people in a room. If empty, SyncRoom asks the first time.",

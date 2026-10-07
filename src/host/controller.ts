@@ -9,11 +9,10 @@ import {resolveLink} from '../resolve/youtube'
 import {BridgeServer} from './bridge-server'
 import {locateBrowser} from './engine/browser-locator'
 import {EngineProcess, buildEngineArgs} from './engine/engine-process'
-import {RoomSession} from './session'
+import {MAX_NAME, RoomSession} from './session'
 
 const t = vscode.l10n.t
 
-const MAX_NAME = 40
 const DEFAULT_VOLUME = 60
 /** Margen para que el «bye» salga antes de matar el motor. */
 const GOODBYE_MS = 300
@@ -98,6 +97,15 @@ export class RoomController implements vscode.Disposable {
     } finally {
       this.busy = false
     }
+  }
+
+  /** Guarda el nombre en los ajustes y, si hay sala, lo cambia en ella. */
+  async rename(name: string): Promise<void> {
+    const clean = name.trim().slice(0, MAX_NAME)
+    if (clean === '') return
+    await vscode.workspace.getConfiguration('syncroom').update('displayName', clean, vscode.ConfigurationTarget.Global)
+    this.active?.session.rename(clean)
+    this.changed.fire()
   }
 
   setVolume(value: number): void {
@@ -228,18 +236,28 @@ export class RoomController implements vscode.Disposable {
     }
   }
 
-  private async ensureName(config: vscode.WorkspaceConfiguration): Promise<string | undefined> {
-    const saved = config.get<string>('displayName', '').trim()
-    if (saved !== '') return saved.slice(0, MAX_NAME)
+  /** Pide el nombre con un cuadro de texto; undefined si se cancela. */
+  async askName(initial?: string): Promise<string | undefined> {
     const typed = await vscode.window.showInputBox({
       title: t('Your name in the room'),
       prompt: t('Shown to the other people in the room.'),
-      value: systemUserName(),
+      value: initial ?? systemUserName(),
       validateInput: value =>
         value.trim() === '' || value.trim().length > MAX_NAME ? t('Enter a name of up to 40 characters.') : undefined
     })
     const name = typed?.trim() ?? ''
-    if (name === '') return undefined
+    return name === '' ? undefined : name.slice(0, MAX_NAME)
+  }
+
+  currentName(): string {
+    return vscode.workspace.getConfiguration('syncroom').get<string>('displayName', '').trim().slice(0, MAX_NAME)
+  }
+
+  private async ensureName(config: vscode.WorkspaceConfiguration): Promise<string | undefined> {
+    const saved = config.get<string>('displayName', '').trim()
+    if (saved !== '') return saved.slice(0, MAX_NAME)
+    const name = await this.askName()
+    if (name === undefined) return undefined
     await config.update('displayName', name, vscode.ConfigurationTarget.Global)
     return name
   }

@@ -91,6 +91,12 @@ input[type='range'] { width: 100%; min-width: 0; margin: 0; accent-color: var(--
 .pass .code:hover .value { color: var(--vscode-textLink-activeForeground); }
 
 .people { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.15rem; font-size: 0.92em; overflow-wrap: anywhere; }
+.people button.me {
+  padding: 0 0.2em; margin-left: -0.2em; border: 0; border-radius: 0.15em;
+  background: none; color: inherit; text-decoration: underline dotted; text-underline-offset: 0.2em;
+}
+.people button.me:hover:not(:disabled) { background: var(--vscode-toolbar-hoverBackground); }
+.people input.me { display: inline-block; width: auto; max-width: 100%; padding: 0.1em 0.4em; }
 .people .link { color: var(--vscode-descriptionForeground); }
 .people .link::before {
   content: ''; display: inline-block; width: 0.5em; height: 0.5em; margin-right: 0.45em;

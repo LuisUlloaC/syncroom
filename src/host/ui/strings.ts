@@ -14,6 +14,7 @@ export function webviewStrings(): Record<string, string> {
     'room.copy': t('Copy room code'),
     'room.leave': t('Leave room'),
     'room.you': t('you'),
+    'room.rename': t('Change your name'),
     'room.unnamed': t('Someone'),
     'room.direct': t('Connected directly'),
     'room.relayed': t('Connected through relays'),

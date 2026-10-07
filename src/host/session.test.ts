@@ -446,6 +446,29 @@ describe('view', () => {
   })
 })
 
+describe('renaming', () => {
+  it('rename trims, limits to 40 characters, tells the room and ignores empty names', () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    link.take()
+    session.rename('  Luis  ')
+    expect(session.view().me.name).toBe('Luis')
+    expect(sends(link.take())).toEqual([['hello', true]])
+    session.rename('x'.repeat(50))
+    expect(session.view().me.name).toBe('x'.repeat(40))
+    session.rename('   ')
+    expect(session.view().me.name).toBe('x'.repeat(40))
+    expect(sends(link.take())).toEqual([['hello', true]])
+  })
+
+  it('rename before the engine is ready still changes the name shown', () => {
+    const {link, session} = setup()
+    session.rename('Early')
+    expect(session.view().me.name).toBe('Early')
+    expect(link.take()).toEqual([])
+  })
+})
+
 describe('command/status feedback', () => {
   // Imita el ida y vuelta real por loopback: cada orden provoca un «status» ~1 ms después,
   // y YouTube aún no ha reaccionado (sigue en el estado anterior).

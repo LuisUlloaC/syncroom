@@ -8,6 +8,7 @@
   "command.next": "Siguiente pista",
   "command.togglePlayer": "Mostrar u ocultar la ventana del reproductor",
   "command.copyCode": "Copiar código de sala",
+  "command.changeName": "Cambiar nombre…",
   "command.showLog": "Mostrar registro",
   "view.name": "Sala",
   "config.displayName": "Nombre que ven las demás personas de la sala. Si está vacío, SyncRoom lo pregunta la primera vez.",

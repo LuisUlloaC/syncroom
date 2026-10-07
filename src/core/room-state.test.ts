@@ -404,6 +404,24 @@ describe('hostile input', () => {
   })
 })
 
+describe('renaming', () => {
+  it('setName broadcasts a hello and the others adopt the new name', () => {
+    const clock = {t: 1000}
+    const a = peer('a', clock)
+    const b = peer('b', clock)
+    settle(a, b, b.join(), a.join())
+    expect(b.peerList().map(p => p.name)).toEqual(['B', 'A'])
+    const out = a.setName('Ana')
+    expect(out.map(o => [o.msg.type, o.relay])).toEqual([['hello', true]])
+    settle(a, b, [], out)
+    expect(a.peerList()[0]?.name).toBe('Ana')
+    expect(b.peerList().map(p => p.name)).toEqual(['B', 'Ana'])
+    // Lo que se añada a partir de ahora lleva el nombre nuevo; lo anterior no cambia.
+    a.addTracks([meta(1)])
+    expect(a.queue()[0]?.addedBy).toBe('Ana')
+  })
+})
+
 describe('presence', () => {
   it('lists self first, learns names, expires and handles bye', () => {
     const clock = {t: 1000}

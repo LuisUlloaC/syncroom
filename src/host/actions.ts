@@ -98,6 +98,13 @@ export class Actions {
     await this.controller.togglePlayer()
   }
 
+  /** Sin argumento pregunta el nombre; con él (desde la vista) lo aplica directamente. */
+  async changeName(name?: string): Promise<void> {
+    const chosen = name ?? (await this.controller.askName(this.controller.currentName()))
+    if (chosen === undefined) return
+    await this.controller.rename(chosen)
+  }
+
   showLog(): void {
     this.controller.showLog()
   }
@@ -121,6 +128,7 @@ export function registerCommands(actions: Actions): vscode.Disposable[] {
     'syncroom.next': () => actions.next(),
     'syncroom.togglePlayer': () => actions.togglePlayer(),
     'syncroom.copyCode': () => actions.copyCode(),
+    'syncroom.changeName': () => actions.changeName(),
     'syncroom.showLog': () => actions.showLog()
   }
   return Object.entries(handlers).map(([command, handler]) => vscode.commands.registerCommand(command, handler))

@@ -80,7 +80,7 @@ function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
 
       <p class="people">
         <span>
-          {room.me.name} ({s('room.you')})
+          <MyName name={room.me.name} />
           {others.map(peer => `, ${peer.name === '' ? s('room.unnamed') : peer.name}`)}
         </span>
         <span class={room.net.directPeers > 0 ? 'link direct' : 'link'}>
@@ -144,6 +144,40 @@ function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
       <AddLink />
       <Queue tracks={room.tracks} />
     </main>
+  )
+}
+
+/** El nombre propio: clic para editarlo en el sitio; Enter o salir guarda, Escape cancela. */
+function MyName({name}: {name: string}) {
+  const [draft, setDraft] = useState<string | undefined>(undefined)
+  if (draft === undefined) {
+    return (
+      <button class="me" onClick={() => setDraft(name)} title={s('room.rename')}>
+        {name} ({s('room.you')})
+      </button>
+    )
+  }
+  const save = (): void => {
+    const clean = draft.trim()
+    if (clean !== '' && clean !== name) post({t: 'rename', name: clean})
+    setDraft(undefined)
+  }
+  return (
+    <input
+      class="me"
+      value={draft}
+      maxLength={40}
+      aria-label={s('room.rename')}
+      spellcheck={false}
+      autocomplete="off"
+      ref={el => el?.focus()}
+      onInput={event => setDraft(event.currentTarget.value)}
+      onBlur={save}
+      onKeyDown={event => {
+        if (event.key === 'Enter') save()
+        if (event.key === 'Escape') setDraft(undefined)
+      }}
+    />
   )
 }
 

@@ -22,6 +22,7 @@ interface PeerInfo {
 
 export class RoomState {
   private readonly clock: LamportClock
+  private name: string
   /** Incluye las pistas borradas: hacen falta para saber cuál venía después. */
   private readonly tracks = new Map<string, Track>()
   private readonly removed = new Set<string>()
@@ -33,6 +34,7 @@ export class RoomState {
 
   constructor(private readonly opts: RoomStateOptions) {
     this.clock = new LamportClock(opts.peerId)
+    this.name = opts.name
     this.playback = {trackId: null, playing: false, positionS: 0, anchorAt: opts.now(), stamp: ZERO_STAMP}
   }
 
@@ -67,7 +69,7 @@ export class RoomState {
     const others = [...this.peers.entries()]
       .map(([id, info]) => ({id, name: info.name}))
       .sort((a, b) => (a.id < b.id ? -1 : 1))
-    return [{id: this.opts.peerId, name: this.opts.name}, ...others]
+    return [{id: this.opts.peerId, name: this.name}, ...others]
   }
 
   digest(): string {
@@ -97,6 +99,13 @@ export class RoomState {
     return [this.hello(relay)]
   }
 
+  /** Cambia el nombre propio y lo anuncia; las pistas ya añadidas conservan el anterior. */
+  setName(name: string): Outgoing[] {
+    this.name = name
+    this.emit()
+    return [this.hello(true)]
+  }
+
   pings(): Outgoing[] {
     const t0 = this.opts.now()
     return [...this.peers.keys()].map(
@@ -122,7 +131,7 @@ export class RoomState {
         videoId: meta.videoId,
         title: meta.title,
         author: meta.author,
-        addedBy: this.opts.name,
+        addedBy: this.name,
         order,
         rank: ranks[i] ?? '',
         moved: order
@@ -304,7 +313,7 @@ export class RoomState {
 
   private hello(relay: boolean): Outgoing {
     return {
-      msg: {type: 'hello', from: this.opts.peerId, name: this.opts.name, digest: this.digest()},
+      msg: {type: 'hello', from: this.opts.peerId, name: this.name, digest: this.digest()},
       relay
     }
   }
@@ -313,7 +322,7 @@ export class RoomState {
     return {
       type: 'state',
       from: this.opts.peerId,
-      name: this.opts.name,
+      name: this.name,
       tracks: this.queue(),
       removed: [...this.removed].slice(0, MAX_REMOVED),
       playback: this.toWire()

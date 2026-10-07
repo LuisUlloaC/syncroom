@@ -60,8 +60,11 @@ const UNPLAYABLE_CODES = new Set([2, 5, 100, 101, 150])
 
 const NOTHING_LOADED: PlayerStatus = {videoId: null, state: 'unstarted', timeS: 0, durationS: 0}
 
+export const MAX_NAME = 40
+
 export class RoomSession {
   private readonly state: RoomState
+  private name: string
   private readonly now: () => number
   private readonly listeners = new Set<() => void>()
   private readonly failureListeners = new Set<() => void>()
@@ -85,6 +88,7 @@ export class RoomSession {
   constructor(private readonly opts: SessionOptions) {
     this.now = opts.now ?? (() => Date.now())
     this.volume = clampVolume(opts.volume)
+    this.name = opts.name
     this.state = new RoomState({peerId: opts.peerId, name: opts.name, now: this.now})
     this.state.onChange(() => this.onStateChange())
   }
@@ -136,7 +140,7 @@ export class RoomSession {
     const expected = current === undefined ? 0 : this.state.expectedPosition()
     return {
       code: this.opts.code,
-      me: {id: this.opts.peerId, name: this.opts.name},
+      me: {id: this.opts.peerId, name: this.name},
       peers: this.state.peerList(),
       tracks: this.state.queue().map(track => ({
         id: track.id,
@@ -198,6 +202,15 @@ export class RoomSession {
 
   seek(positionS: number): void {
     this.sendAll(this.state.seek(positionS))
+  }
+
+  /** Nombre nuevo, recortado y acotado; vacío se ignora. Se anuncia al momento si el motor está listo. */
+  rename(name: string): void {
+    const clean = name.trim().slice(0, MAX_NAME)
+    if (clean === '' || clean === this.name) return
+    this.name = clean
+    this.sendAll(this.state.setName(clean))
+    this.emit()
   }
 
   setVolume(value: number): void {

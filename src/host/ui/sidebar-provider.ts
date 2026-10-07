@@ -75,6 +75,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'togglePlayer':
         await this.actions.togglePlayer()
         break
+      case 'rename':
+        await this.actions.changeName(msg.name)
+        break
     }
   }
 
