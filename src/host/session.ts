@@ -68,7 +68,10 @@ export class RoomSession {
   private readyTimer: ReturnType<typeof setTimeout> | undefined
   private unsubscribeDrop: (() => void) | undefined
   private readonly unplayable = new Set<string>()
+  /** Estado del reproductor, ya con las órdenes enviadas anotadas encima. */
   private status: PlayerStatus | undefined
+  /** Último estado tal como lo informó el reproductor, sin anotar. */
+  private reported: PlayerStatus | undefined
   private engineReady = false
   private fault: string | undefined
   private net = {directPeers: 0, relaysOk: 0}
@@ -213,6 +216,7 @@ export class RoomSession {
         this.log('engine ready')
         this.engineReady = true
         this.status = NOTHING_LOADED
+        this.reported = undefined
         this.loadGraceUntil = 0
         this.opts.link.send({t: 'join', code: this.opts.code, direct: this.opts.direct, relays: this.opts.relays})
         this.opts.link.send({t: 'volume', value: this.volume})
@@ -225,7 +229,11 @@ export class RoomSession {
         break
       case 'status': {
         if (this.now() < this.loadGraceUntil && msg.status.videoId !== this.status?.videoId) break
-        const before = this.status
+        // Se compara con lo último que informó el reproductor, no con lo anotado al mandar la orden:
+        // el estado que llega justo tras una orden aún no la refleja, y tomarlo por un cambio
+        // encadenaba órdenes sin fin mientras YouTube arrancaba.
+        const before = this.reported
+        this.reported = msg.status
         this.status = msg.status
         // Un cambio de estado real (p. ej. acaba de cargar) se corrige al momento, no en el próximo tick.
         if (before === undefined || before.state !== msg.status.state || before.videoId !== msg.status.videoId) {
@@ -325,6 +333,7 @@ export class RoomSession {
     this.engineReady = false
     this.fault = undefined
     this.status = undefined
+    this.reported = undefined
     this.emit()
     for (const listener of this.failureListeners) listener()
   }

@@ -445,3 +445,74 @@ describe('view', () => {
     ])
   })
 })
+
+describe('command/status feedback', () => {
+  // Imita el ida y vuelta real por loopback: cada orden provoca un «status» ~1 ms después,
+  // y YouTube aún no ha reaccionado (sigue en el estado anterior).
+  function slowPlayer(link: FakeLink) {
+    let real: PlayerStatus = NOTHING
+    const original = link.send.bind(link)
+    link.send = (msg: HostToEngine) => {
+      original(msg)
+      if (msg.t !== 'player') return
+      if (msg.cmd.type === 'load') real = {videoId: msg.cmd.videoId, state: 'unstarted', timeS: 0, durationS: 0}
+      const snapshot = real
+      setTimeout(() => link.emit({t: 'status', status: snapshot}), 1)
+    }
+    return {
+      becomes(status: PlayerStatus) {
+        real = status
+        link.emit({t: 'status', status})
+      }
+    }
+  }
+  const NOTHING: PlayerStatus = {videoId: null, state: 'unstarted', timeS: 0, durationS: 0}
+
+  it('does not hammer the player while YouTube is still reacting to the last command', async () => {
+    const {link, session} = setup()
+    slowPlayer(link)
+    let emits = 0
+    session.onChange(() => (emits += 1))
+    link.emit({t: 'ready'})
+    await session.addLink('x')
+    await vi.advanceTimersByTimeAsync(1000)
+    // Carga y, al ver el vídeo sin arrancar, un único «play»; nada más hasta que el reproductor cambie.
+    expect(commands(link.take()).map(c => c.type)).toEqual(['load', 'play'])
+    expect(emits).toBeLessThan(20)
+  })
+
+  it('retries on the periodic check if the player still disagrees', async () => {
+    const {link, session} = setup()
+    slowPlayer(link)
+    link.emit({t: 'ready'})
+    await session.addLink('x')
+    await vi.advanceTimersByTimeAsync(1000)
+    link.take()
+    await vi.advanceTimersByTimeAsync(5000)
+    // Han pasado 6 s de sala y el reproductor sigue en 0: salto y «play», una sola vez.
+    expect(commands(link.take()).map(c => c.type)).toEqual(['seek', 'play'])
+  })
+
+  it('reacts at once to a real change of state after a command', async () => {
+    const {link, session} = setup()
+    const player = slowPlayer(link)
+    link.emit({t: 'ready'})
+    await session.addLink('x')
+    await vi.advanceTimersByTimeAsync(50)
+    link.take()
+    player.becomes({videoId: 'aaaaaaaaaaa', state: 'cued', timeS: 0, durationS: 200})
+    expect(commands(link.take()).map(c => c.type)).toEqual(['play'])
+  })
+
+  it('still reacts at once to a user action right after a command', async () => {
+    const {link, session} = setup()
+    const player = slowPlayer(link)
+    link.emit({t: 'ready'})
+    await session.addLink('x')
+    await vi.advanceTimersByTimeAsync(50)
+    player.becomes(playing('aaaaaaaaaaa', 0.1))
+    link.take()
+    session.togglePlay()
+    expect(commands(link.take())).toEqual([{type: 'pause'}])
+  })
+})

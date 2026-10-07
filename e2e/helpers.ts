@@ -19,6 +19,8 @@ export const VIDEO: VideoMeta = {
 export interface TestPeer {
   session: RoomSession
   profileDir: string
+  /** Órdenes enviadas al reproductor (load/play/pause/seek/stop) desde el arranque. */
+  playerCommands: () => number
   stop(): Promise<void>
 }
 
@@ -39,6 +41,12 @@ export async function startPeer(options: PeerOptions): Promise<TestPeer> {
   const profileDir = await mkdtemp(join(tmpdir(), 'syncroom-e2e-'))
   const bridge = await BridgeServer.start({pageDir: resolve('dist/engine')})
   const engine = new EngineProcess(browser)
+  let playerCommands = 0
+  const originalSend = bridge.send.bind(bridge)
+  bridge.send = msg => {
+    if (msg.t === 'player') playerCommands += 1
+    originalSend(msg)
+  }
   const session = new RoomSession({
     code: options.code,
     peerId: generatePeerId(),
@@ -56,6 +64,7 @@ export async function startPeer(options: PeerOptions): Promise<TestPeer> {
   return {
     session,
     profileDir,
+    playerCommands: () => playerCommands,
     async stop() {
       session.dispose()
       await sleep(300)

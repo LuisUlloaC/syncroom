@@ -78,7 +78,7 @@ export class Player {
         this.yt.stopVideo()
         break
     }
-    this.emitStatus()
+    // Sin emitir el estado aquí: todavía no refleja la orden y el host lo tomaría por un cambio real.
   }
 
   setVolume(value: number): void {

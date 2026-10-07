@@ -18,6 +18,9 @@ describe('engine', () => {
       peer.session.seek(120)
       peer.session.togglePlay()
       await waitFor('playing after the seek', () => status()?.state === 'playing' && (status()?.timeS ?? 0) > 119, 40_000)
+      // Cargar, pausar, saltar y reanudar son un puñado de órdenes; cientos = bucle orden/estado.
+      console.log(`player commands during the test: ${peer.playerCommands()}`)
+      expect(peer.playerCommands()).toBeLessThan(15)
     } finally {
       await peer.stop()
     }
