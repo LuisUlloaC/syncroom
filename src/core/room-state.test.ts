@@ -38,6 +38,13 @@ describe('queue', () => {
     expect(out.every(o => o.relay)).toBe(true)
   })
 
+  it('adding to an empty room can start at a later track', () => {
+    const a = peer('a', {t: 1000})
+    const out = a.addTracks([meta(1), meta(2), meta(3)], 1)
+    expect(a.currentTrack()?.videoId).toBe(meta(2).videoId)
+    expect(out.map(o => o.msg.type)).toEqual(['add', 'playback'])
+  })
+
   it('adding while something plays does not touch playback', () => {
     const a = peer('a', {t: 1000})
     a.addTracks([meta(1)])

@@ -89,7 +89,8 @@ describe('fetchPlaylist', () => {
         {videoId: 'M7lc1UVf-VE', title: 'ROSÉ & Bruno Mars - APT.', author: 'ROSÉ'},
         {videoId: 'jNQXAC9IVRw', title: '1999', author: 'Prince'}
       ],
-      truncated: false
+      truncated: false,
+      startIndex: 0
     })
   })
 
@@ -144,6 +145,49 @@ describe('resolveLink', () => {
     }
     const result = await resolveLink('https://www.youtube.com/playlist?list=PLMC9KNkIncKtPzgY-5rmhvj7fax8fdxoj', get)
     expect(result.metas).toHaveLength(1)
+    expect(result.startIndex).toBe(0)
     expect(urls).toEqual(['https://www.youtube.com/feeds/videos.xml?playlist_id=PLMC9KNkIncKtPzgY-5rmhvj7fax8fdxoj'])
+  })
+
+  const LIST = 'https://www.youtube.com/watch?v=M7lc1UVf-VE&list=PLMC9KNkIncKtPzgY-5rmhvj7fax8fdxoj'
+  const THREE = feed([entry('jNQXAC9IVRw', 'One', 'A'), entry('M7lc1UVf-VE', 'Two', 'A'), entry('dQw4w9WgXcQ', 'Three', 'A')])
+  const byUrl =
+    (routes: Record<string, [number, string]>): HttpGet =>
+    async url => {
+      const hit = Object.entries(routes).find(([prefix]) => url.startsWith(prefix))
+      if (hit === undefined) throw new Error(`unexpected request ${url}`)
+      const [status, body] = hit[1]
+      return {ok: status < 300, status, text: async () => body}
+    }
+
+  it('loads the whole playlist from a watch link and starts at the pasted video', async () => {
+    const result = await resolveLink(LIST, byUrl({'https://www.youtube.com/feeds/': [200, THREE]}))
+    expect(result.metas.map(m => m.videoId)).toEqual(['jNQXAC9IVRw', 'M7lc1UVf-VE', 'dQw4w9WgXcQ'])
+    expect(result.startIndex).toBe(1)
+  })
+
+  it('puts the pasted video first when the feed does not include it', async () => {
+    const get = byUrl({
+      'https://www.youtube.com/feeds/': [200, feed([entry('jNQXAC9IVRw', 'One', 'A')])],
+      'https://www.youtube.com/oembed': [200, OEMBED]
+    })
+    const result = await resolveLink(LIST, get)
+    expect(result.metas.map(m => m.videoId)).toEqual(['M7lc1UVf-VE', 'jNQXAC9IVRw'])
+    expect(result.startIndex).toBe(0)
+  })
+
+  it('falls back to the single video when the list has no feed (mixes, private lists)', async () => {
+    const get = byUrl({
+      'https://www.youtube.com/feeds/': [404, 'Not Found'],
+      'https://www.youtube.com/oembed': [200, OEMBED]
+    })
+    const result = await resolveLink('https://music.youtube.com/watch?v=M7lc1UVf-VE&list=RDAMVMM7lc1UVf-VE', get)
+    expect(result.metas.map(m => m.videoId)).toEqual(['M7lc1UVf-VE'])
+    expect(result.truncated).toBe(false)
+  })
+
+  it('still fails when a bare playlist link has no feed', async () => {
+    const get = byUrl({'https://www.youtube.com/feeds/': [404, 'Not Found']})
+    expect(await codeOf(resolveLink('https://www.youtube.com/playlist?list=PLMC9KNkIncKtPzgY-5rmhvj7fax8fdxoj', get))).toBe('not-found')
   })
 })

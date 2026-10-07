@@ -107,7 +107,8 @@ export class RoomState {
     return [{msg: {type: 'bye', from: this.opts.peerId}, relay: true}]
   }
 
-  addTracks(metas: VideoMeta[]): Outgoing[] {
+  /** `startIndex`: cuál suena primero si la sala estaba parada (por defecto, la primera añadida). */
+  addTracks(metas: VideoMeta[], startIndex = 0): Outgoing[] {
     const room = Math.max(0, MAX_QUEUE - this.queue().length)
     const added: Track[] = []
     for (const meta of metas.slice(0, room)) {
@@ -123,7 +124,7 @@ export class RoomState {
       this.tracks.set(track.id, track)
       added.push(track)
     }
-    const first = added[0]
+    const first = added[startIndex] ?? added[0]
     if (first === undefined) return []
     const out: Outgoing[] = [{msg: {type: 'add', from: this.opts.peerId, tracks: added}, relay: true}]
     if (this.currentTrack() === undefined) out.push(...this.writePlayback(first.id, true, 0))

@@ -1,4 +1,7 @@
-export type ParsedLink = {kind: 'video'; videoId: string} | {kind: 'playlist'; listId: string}
+export type ParsedLink =
+  | {kind: 'video'; videoId: string}
+  /** `videoId` = el vídeo que acompañaba al enlace (watch?v=…&list=…): por él se empieza. */
+  | {kind: 'playlist'; listId: string; videoId?: string}
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
 const LIST_ID = /^[A-Za-z0-9_-]{10,64}$/
@@ -13,8 +16,10 @@ const YOUTUBE_HOSTS = new Set([
 ])
 const VIDEO_PATHS = new Set(['shorts', 'embed', 'live', 'v'])
 
-function video(id: string | null | undefined): ParsedLink | undefined {
-  return id !== null && id !== undefined && VIDEO_ID.test(id) ? {kind: 'video', videoId: id} : undefined
+function video(id: string | null | undefined, list: string | null = null): ParsedLink | undefined {
+  if (id === null || id === undefined || !VIDEO_ID.test(id)) return undefined
+  if (list !== null && LIST_ID.test(list)) return {kind: 'playlist', listId: list, videoId: id}
+  return {kind: 'video', videoId: id}
 }
 
 export function parseYouTubeLink(input: string): ParsedLink | undefined {
@@ -32,14 +37,12 @@ export function parseYouTubeLink(input: string): ParsedLink | undefined {
   const host = url.hostname.toLowerCase()
   const [, first, second] = url.pathname.split('/')
 
-  if (host === 'youtu.be') return video(first)
+  const list = url.searchParams.get('list')
+  if (host === 'youtu.be') return video(first, list)
   if (!YOUTUBE_HOSTS.has(host)) return undefined
 
-  if (first === 'watch') return video(url.searchParams.get('v'))
+  if (first === 'watch') return video(url.searchParams.get('v'), list)
   if (first !== undefined && VIDEO_PATHS.has(first)) return video(second)
-  if (first === 'playlist') {
-    const list = url.searchParams.get('list')
-    return list !== null && LIST_ID.test(list) ? {kind: 'playlist', listId: list} : undefined
-  }
+  if (first === 'playlist') return list !== null && LIST_ID.test(list) ? {kind: 'playlist', listId: list} : undefined
   return undefined
 }

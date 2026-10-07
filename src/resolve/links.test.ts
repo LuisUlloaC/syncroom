@@ -23,10 +23,18 @@ describe('parseYouTubeLink', () => {
     expect(parseYouTubeLink(input)).toEqual(video(id))
   })
 
-  it('treats watch links that also carry a list as a single video', () => {
-    expect(parseYouTubeLink('https://www.youtube.com/watch?v=M7lc1UVf-VE&list=PLMC9KNkIncKtPzgY-5rmhvj7fax8fdxoj')).toEqual(
-      video('M7lc1UVf-VE')
-    )
+  it('reads the playlist from watch and short links that carry a list, remembering the video', () => {
+    const expected = {kind: 'playlist', listId: 'PLMC9KNkIncKtPzgY-5rmhvj7fax8fdxoj', videoId: 'M7lc1UVf-VE'}
+    expect(parseYouTubeLink('https://www.youtube.com/watch?v=M7lc1UVf-VE&list=PLMC9KNkIncKtPzgY-5rmhvj7fax8fdxoj&index=3')).toEqual(expected)
+    expect(parseYouTubeLink('https://youtu.be/M7lc1UVf-VE?list=PLMC9KNkIncKtPzgY-5rmhvj7fax8fdxoj')).toEqual(expected)
+    expect(parseYouTubeLink('https://music.youtube.com/watch?v=M7lc1UVf-VE&list=RDAMVMM7lc1UVf-VE')).toEqual({
+      ...expected,
+      listId: 'RDAMVMM7lc1UVf-VE'
+    })
+  })
+
+  it('ignores a malformed list on a watch link and keeps the video', () => {
+    expect(parseYouTubeLink('https://www.youtube.com/watch?v=M7lc1UVf-VE&list=x')).toEqual(video('M7lc1UVf-VE'))
   })
 
   it('reads playlists', () => {

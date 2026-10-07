@@ -176,7 +176,7 @@ export class RoomSession {
   async addLink(input: string): Promise<{added: number; truncated: boolean}> {
     const resolved = await this.opts.resolve(input)
     const before = this.state.queue().length
-    this.sendAll(this.state.addTracks(resolved.metas))
+    this.sendAll(this.state.addTracks(resolved.metas, resolved.startIndex))
     return {added: this.state.queue().length - before, truncated: resolved.truncated}
   }
 

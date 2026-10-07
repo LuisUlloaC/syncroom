@@ -55,7 +55,7 @@ export async function startPeer(options: PeerOptions): Promise<TestPeer> {
     relays: DEFAULT_RELAYS,
     volume: 0,
     link: bridge,
-    resolve: async () => ({metas: [VIDEO], truncated: false})
+    resolve: async () => ({metas: [VIDEO], truncated: false, startIndex: 0})
   })
   session.start()
   const visible = options.visible ?? process.env.SYNCROOM_E2E_VISIBLE === '1'

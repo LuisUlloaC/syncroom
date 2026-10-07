@@ -51,14 +51,14 @@ function setup(over: Partial<SessionOptions> = {}) {
     relays: ['wss://relay.example'],
     volume: 60,
     link,
-    resolve: async () => ({metas: [FIRST], truncated: false}),
+    resolve: async () => ({metas: [FIRST], truncated: false, startIndex: 0}),
     ...over
   })
   session.start()
   return {link, session}
 }
 
-const twoTracks = {resolve: async () => ({metas: [FIRST, SECOND], truncated: false})}
+const twoTracks = {resolve: async () => ({metas: [FIRST, SECOND], truncated: false, startIndex: 0})}
 
 const playing = (videoId: string, timeS: number): PlayerStatus => ({videoId, state: 'playing', timeS, durationS: 200})
 
