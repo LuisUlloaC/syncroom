@@ -6,6 +6,9 @@ const MAX_ID = 64
 const MAX_NAME = 40
 const MAX_TITLE = 300
 const MAX_TRACKS = 500
+const MAX_RANK = 256
+/** Alfabeto base62 de fractional-indexing. */
+const RANK = /^[0-9A-Za-z]+$/
 export const MAX_REMOVED = 5000
 const MAX_POSITION_S = 24 * 60 * 60
 const MAX_AGE_MS = 24 * 60 * 60 * 1000
@@ -28,6 +31,10 @@ function isNumberIn(value: unknown, min: number, max: number): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
 }
 
+function isRank(value: unknown): value is string {
+  return isText(value, MAX_RANK) && RANK.test(value)
+}
+
 function isStamp(value: unknown): value is Stamp {
   return isDict(value) && isNumberIn(value.counter, 0, MAX_COUNTER) && Number.isInteger(value.counter) && isText(value.peerId, MAX_ID)
 }
@@ -41,7 +48,9 @@ function isTrack(value: unknown): value is Track {
     isText(value.title, MAX_TITLE) &&
     isText(value.author, MAX_TITLE) &&
     isText(value.addedBy, MAX_NAME) &&
-    isStamp(value.order)
+    isStamp(value.order) &&
+    isRank(value.rank) &&
+    isStamp(value.moved)
   )
 }
 
@@ -79,6 +88,8 @@ export function isRoomMessage(value: unknown): value is RoomMessage {
       return isTrackList(value.tracks)
     case 'remove':
       return isId(value.trackId)
+    case 'move':
+      return isId(value.trackId) && isRank(value.rank) && isStamp(value.moved)
     case 'playback':
       return isPlaybackWire(value.playback)
     case 'ping':

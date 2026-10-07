@@ -12,7 +12,12 @@ export interface Track {
   title: string
   author: string
   addedBy: string
+  /** Marca de alta: identifica la pista y desempata ranks iguales. */
   order: Stamp
+  /** Posición en la cola: índice fraccionario (base62); se compara como texto. */
+  rank: string
+  /** Última vez que se fijó `rank`; gana la marca mayor. */
+  moved: Stamp
 }
 
 /** Reproducción tal como se guarda en local: `anchorAt` está en el reloj de este equipo. */
@@ -45,6 +50,7 @@ export type RoomMessage =
   | {type: 'state'; from: PeerId; name: string; tracks: Track[]; removed: string[]; playback: PlaybackWire}
   | {type: 'add'; from: PeerId; tracks: Track[]}
   | {type: 'remove'; from: PeerId; trackId: string}
+  | {type: 'move'; from: PeerId; trackId: string; rank: string; moved: Stamp}
   | {type: 'playback'; from: PeerId; playback: PlaybackWire}
   | {type: 'ping'; from: PeerId; to: PeerId; t0: number}
   | {type: 'pong'; from: PeerId; to: PeerId; t0: number}

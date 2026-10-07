@@ -1,3 +1,4 @@
+import {generateKeyBetween, generateNKeysBetween} from 'fractional-indexing'
 import {fnv1a} from './hash'
 import {LamportClock, ZERO_STAMP, compareStamps} from './stamp'
 import {MAX_REMOVED} from './validate'
@@ -44,7 +45,7 @@ export class RoomState {
   queue(): Track[] {
     return [...this.tracks.values()]
       .filter(track => !this.removed.has(track.id))
-      .sort((a, b) => compareStamps(a.order, b.order))
+      .sort(compareTracks)
   }
 
   currentTrack(): Track | undefined {
@@ -109,9 +110,12 @@ export class RoomState {
 
   /** `startIndex`: cuál suena primero si la sala estaba parada (por defecto, la primera añadida). */
   addTracks(metas: VideoMeta[], startIndex = 0): Outgoing[] {
-    const room = Math.max(0, MAX_QUEUE - this.queue().length)
+    const live = this.queue()
+    const room = Math.max(0, MAX_QUEUE - live.length)
+    const accepted = metas.slice(0, room)
+    const ranks = generateNKeysBetween(live.at(-1)?.rank ?? null, null, accepted.length)
     const added: Track[] = []
-    for (const meta of metas.slice(0, room)) {
+    for (const [i, meta] of accepted.entries()) {
       const order = this.clock.tick()
       const track: Track = {
         id: `${order.peerId}:${order.counter}`,
@@ -119,7 +123,9 @@ export class RoomState {
         title: meta.title,
         author: meta.author,
         addedBy: this.opts.name,
-        order
+        order,
+        rank: ranks[i] ?? '',
+        moved: order
       }
       this.tracks.set(track.id, track)
       added.push(track)
@@ -139,6 +145,44 @@ export class RoomState {
     const healed = this.healPlayback()
     if (healed.length === 0) this.emit()
     return [...out, ...healed]
+  }
+
+  /**
+   * Coloca la pista entre `beforeId` (la que quedará delante; null = principio) y `afterId`
+   * (la que quedará detrás; null = final). Vecinos que no estén vivos o estén invertidos: no hace nada.
+   */
+  moveTrack(trackId: string, beforeId: string | null, afterId: string | null): Outgoing[] {
+    const track = this.liveTrack(trackId)
+    if (track === undefined || beforeId === trackId || afterId === trackId) return []
+    const before = beforeId === null ? null : this.liveTrack(beforeId)
+    const after = afterId === null ? null : this.liveTrack(afterId)
+    if (before === undefined || after === undefined) return []
+    const lower = before?.rank ?? null
+    const upper = after?.rank ?? null
+    if (lower !== null && upper !== null && lower >= upper) return []
+    let rank: string
+    try {
+      rank = generateKeyBetween(lower, upper)
+    } catch {
+      return []
+    }
+    track.rank = rank
+    track.moved = this.clock.tick()
+    this.emit()
+    return [{msg: {type: 'move', from: this.opts.peerId, trackId, rank, moved: track.moved}, relay: true}]
+  }
+
+  /** Pone la pista justo detrás de la que suena (o la primera, si no suena nada). */
+  playNext(trackId: string): Outgoing[] {
+    const current = this.currentTrack()
+    if (current?.id === trackId) return []
+    const queue = this.queue().filter(track => track.id !== trackId)
+    const at = current === undefined ? -1 : queue.findIndex(track => track.id === current.id)
+    const before = at < 0 ? null : (queue[at]?.id ?? null)
+    const after = queue[at + 1]?.id ?? null
+    // Ya está en su sitio.
+    if (this.queue()[at + 1]?.id === trackId) return []
+    return this.moveTrack(trackId, before, after)
   }
 
   setPlaying(playing: boolean): Outgoing[] {
@@ -217,6 +261,16 @@ export class RoomState {
       case 'remove':
         this.tombstone(msg.trackId)
         break
+      case 'move': {
+        this.clock.observe(msg.moved)
+        const track = this.tracks.get(msg.trackId)
+        // Pista aún desconocida: el «state» que la traiga vendrá ya con su rank.
+        if (track !== undefined && compareStamps(msg.moved, track.moved) > 0) {
+          track.rank = msg.rank
+          track.moved = {counter: msg.moved.counter, peerId: msg.moved.peerId}
+        }
+        break
+      }
       case 'playback':
         this.applyPlayback(msg.playback, this.transit(msg.from, via))
         break
@@ -299,7 +353,17 @@ export class RoomState {
     let live = this.queue().length
     for (const track of incoming) {
       this.clock.observe(track.order)
-      if (this.tracks.has(track.id) || this.removed.has(track.id)) continue
+      this.clock.observe(track.moved)
+      const known = this.tracks.get(track.id)
+      if (known !== undefined) {
+        // Ya la tenemos: solo puede traer un rank más reciente.
+        if (compareStamps(track.moved, known.moved) > 0) {
+          known.rank = track.rank
+          known.moved = {counter: track.moved.counter, peerId: track.moved.peerId}
+        }
+        continue
+      }
+      if (this.removed.has(track.id)) continue
       if (live >= MAX_QUEUE) continue
       // Copia con solo los campos conocidos: lo que sobre no se guarda ni se reenvía.
       this.tracks.set(track.id, {
@@ -308,10 +372,17 @@ export class RoomState {
         title: track.title,
         author: track.author,
         addedBy: track.addedBy,
-        order: {counter: track.order.counter, peerId: track.order.peerId}
+        order: {counter: track.order.counter, peerId: track.order.peerId},
+        rank: track.rank,
+        moved: {counter: track.moved.counter, peerId: track.moved.peerId}
       })
       live += 1
     }
+  }
+
+  private liveTrack(trackId: string): Track | undefined {
+    const track = this.tracks.get(trackId)
+    return track !== undefined && !this.removed.has(trackId) ? track : undefined
   }
 
   /** Lápidas de pistas desconocidas solo hasta un tope: así el propio `state` sigue siendo válido. */
@@ -327,10 +398,11 @@ export class RoomState {
     return this.writePlayback(following?.id ?? null, following !== undefined, 0)
   }
 
+  /** La que sigue en el orden de la cola; vale también para una pista ya borrada. */
   private nextAfter(trackId: string): Track | undefined {
     const anchor = this.tracks.get(trackId)
     if (anchor === undefined) return undefined
-    return this.queue().find(track => compareStamps(track.order, anchor.order) > 0)
+    return this.queue().find(track => compareTracks(track, anchor) > 0)
   }
 
   private transit(from: PeerId, via: Via): number {
@@ -341,4 +413,9 @@ export class RoomState {
   private emit(): void {
     for (const listener of this.listeners) listener()
   }
+}
+
+function compareTracks(a: Track, b: Track): number {
+  if (a.rank !== b.rank) return a.rank < b.rank ? -1 : 1
+  return compareStamps(a.order, b.order)
 }

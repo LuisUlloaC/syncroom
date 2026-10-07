@@ -101,6 +101,116 @@ describe('queue', () => {
   })
 })
 
+describe('reordering', () => {
+  const ids = (s: RoomState): string[] => s.queue().map(t => t.videoId)
+
+  it('new tracks get increasing ranks after the last one', () => {
+    const a = peer('a', {t: 1000})
+    a.addTracks([meta(1), meta(2)])
+    a.addTracks([meta(3)])
+    const ranks = a.queue().map(t => t.rank)
+    expect(ranks).toEqual([...ranks].sort())
+    expect(new Set(ranks).size).toBe(3)
+    expect(ids(a)).toEqual([meta(1).videoId, meta(2).videoId, meta(3).videoId])
+  })
+
+  it('moves a track to the start, between two others and to the end', () => {
+    const a = peer('a', {t: 1000})
+    a.addTracks([meta(1), meta(2), meta(3)])
+    const [t1, t2, t3] = a.queue().map(t => t.id) as [string, string, string]
+    const out = a.moveTrack(t3, null, t1)
+    expect(out.map(o => [o.msg.type, o.relay])).toEqual([['move', true]])
+    expect(ids(a)).toEqual([meta(3).videoId, meta(1).videoId, meta(2).videoId])
+    a.moveTrack(t3, t1, t2)
+    expect(ids(a)).toEqual([meta(1).videoId, meta(3).videoId, meta(2).videoId])
+    a.moveTrack(t1, t2, null)
+    expect(ids(a)).toEqual([meta(3).videoId, meta(2).videoId, meta(1).videoId])
+  })
+
+  it('ignores moves of unknown, removed or self-neighbouring tracks and inverted neighbours', () => {
+    const a = peer('a', {t: 1000})
+    a.addTracks([meta(1), meta(2), meta(3)])
+    const [t1, t2, t3] = a.queue().map(t => t.id) as [string, string, string]
+    expect(a.moveTrack('nope', null, null)).toEqual([])
+    expect(a.moveTrack(t2, t2, t3)).toEqual([])
+    expect(a.moveTrack(t1, t3, t2)).toEqual([])
+    a.removeTrack(t2)
+    expect(a.moveTrack(t2, null, null)).toEqual([])
+    expect(a.moveTrack(t3, null, t2)).toEqual([])
+    expect(ids(a)).toEqual([meta(1).videoId, meta(3).videoId])
+  })
+
+  it('playNext puts a track right after the current one and next() honours it', () => {
+    const a = peer('a', {t: 1000})
+    a.addTracks([meta(1), meta(2), meta(3), meta(4)])
+    const t4 = a.queue()[3]?.id ?? ''
+    expect(a.playNext(t4).map(o => o.msg.type)).toEqual(['move'])
+    expect(ids(a)).toEqual([meta(1).videoId, meta(4).videoId, meta(2).videoId, meta(3).videoId])
+    // Ya es la siguiente, o es la actual: nada que hacer.
+    expect(a.playNext(t4)).toEqual([])
+    expect(a.playNext(a.currentTrack()?.id ?? '')).toEqual([])
+    a.next()
+    expect(a.currentTrack()?.videoId).toBe(meta(4).videoId)
+  })
+
+  it('playNext with nothing playing moves the track to the top', () => {
+    const a = peer('a', {t: 1000})
+    a.addTracks([meta(1), meta(2)])
+    a.setPlaying(false)
+    a.removeTrack(a.currentTrack()?.id ?? '')
+    a.addTracks([meta(3)])
+    // Ahora suena la 3 (se añadió con la sala parada); paramos del todo para probar el caso sin actual.
+    const b = peer('b', {t: 1000})
+    b.addTracks([meta(1), meta(2)])
+    b.next()
+    b.next()
+    expect(b.currentTrack()).toBeUndefined()
+    const t2 = b.queue()[1]?.id ?? ''
+    b.playNext(t2)
+    expect(ids(b)).toEqual([meta(2).videoId, meta(1).videoId])
+  })
+
+  it('concurrent moves of the same track converge on both peers', () => {
+    const clock = {t: 1000}
+    const a = peer('a', clock)
+    const b = peer('b', clock)
+    settle(a, b, b.join(), a.addTracks([meta(1), meta(2), meta(3)]))
+    expect(ids(b)).toEqual(ids(a))
+    const [t1, t2, t3] = a.queue().map(t => t.id) as [string, string, string]
+    // a pone la 3 al principio; b, a la vez, la 3 en medio. Marcas distintas: gana una en los dos.
+    const fromA = a.moveTrack(t3, null, t1)
+    const fromB = b.moveTrack(t3, t1, t2)
+    settle(a, b, fromB, fromA)
+    expect(ids(a)).toEqual(ids(b))
+    expect(ids(a)).toHaveLength(3)
+  })
+
+  it('a move for a track not yet known is ignored and the later state brings its rank', () => {
+    const clock = {t: 1000}
+    const a = peer('a', clock)
+    const b = peer('b', clock)
+    a.addTracks([meta(1), meta(2)])
+    const t2 = a.queue()[1]?.id ?? ''
+    const move = a.moveTrack(t2, null, a.queue()[0]?.id ?? null)
+    expect(b.receive(move[0]?.msg ?? {type: 'bye', from: 'a'}, 'direct')).toEqual([])
+    expect(b.queue()).toHaveLength(0)
+    settle(a, b, b.join(), [])
+    expect(ids(b)).toEqual(ids(a))
+    expect(ids(b)[0]).toBe(meta(2).videoId)
+  })
+
+  it('a newcomer sees the moved order through state', () => {
+    const clock = {t: 1000}
+    const a = peer('a', clock)
+    a.addTracks([meta(1), meta(2), meta(3)])
+    a.moveTrack(a.queue()[2]?.id ?? '', null, a.queue()[0]?.id ?? null)
+    const c = peer('c', clock)
+    settle(a, c, c.join(), [])
+    expect(ids(c)).toEqual(ids(a))
+    expect(ids(c)[0]).toBe(meta(3).videoId)
+  })
+})
+
 describe('playback', () => {
   it('pause keeps the position reached so far', () => {
     const clock = {t: 1000}
@@ -271,12 +381,13 @@ describe('hostile input', () => {
     const clock = {t: 1000}
     const a = peer('a', clock)
     const junk = 'x'.repeat(1000)
-    const track = {id: 'z:1', videoId: meta(1).videoId, title: 'T', author: 'A', addedBy: 'Z', order: {counter: 1, peerId: 'z', junk}, junk}
+    const track = {id: 'z:1', videoId: meta(1).videoId, title: 'T', author: 'A', addedBy: 'Z', order: {counter: 1, peerId: 'z', junk}, rank: 'a0', moved: {counter: 1, peerId: 'z', junk}, junk}
     a.receive({type: 'add', from: 'z', tracks: [track]} as never, 'relay')
     a.receive({type: 'playback', from: 'z', playback: {trackId: 'z:1', playing: true, positionS: 0, ageMs: 0, stamp: {counter: 2, peerId: 'z', junk}, junk}} as never, 'relay')
     const state = JSON.stringify(a.receive({type: 'hello', from: 'b', name: 'B', digest: 'nope'}, 'relay'))
     expect(state).not.toContain(junk)
-    expect(Object.keys(a.queue()[0] ?? {}).sort()).toEqual(['addedBy', 'author', 'id', 'order', 'title', 'videoId'])
+    expect(Object.keys(a.queue()[0] ?? {}).sort()).toEqual(['addedBy', 'author', 'id', 'moved', 'order', 'rank', 'title', 'videoId'])
+    expect(Object.keys(a.queue()[0]?.moved ?? {}).sort()).toEqual(['counter', 'peerId'])
   })
 
   it('caps tombstones for tracks it never saw, so its own state stays valid', () => {

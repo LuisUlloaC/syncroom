@@ -6,44 +6,127 @@
   "publisher": "luisulloac",
   "license": "MIT",
   "icon": "media/icon.png",
-  "repository": {"type": "git", "url": "https://github.com/LuisUlloaC/syncroom.git"},
-  "bugs": {"url": "https://github.com/LuisUlloaC/syncroom/issues"},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LuisUlloaC/syncroom.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LuisUlloaC/syncroom/issues"
+  },
   "homepage": "https://github.com/LuisUlloaC/syncroom#readme",
   "private": true,
-  "engines": { "vscode": "^1.100.0" },
-  "categories": ["Other"],
-  "keywords": ["music", "youtube", "listen together", "room", "sync"],
-  "extensionKind": ["ui"],
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "music",
+    "youtube",
+    "listen together",
+    "room",
+    "sync"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "activationEvents": [],
   "contributes": {
     "commands": [
-      {"command": "syncroom.createRoom", "title": "%command.createRoom%", "category": "SyncRoom"},
-      {"command": "syncroom.joinRoom", "title": "%command.joinRoom%", "category": "SyncRoom"},
-      {"command": "syncroom.leaveRoom", "title": "%command.leaveRoom%", "category": "SyncRoom"},
-      {"command": "syncroom.addLink", "title": "%command.addLink%", "category": "SyncRoom"},
-      {"command": "syncroom.togglePlay", "title": "%command.togglePlay%", "category": "SyncRoom"},
-      {"command": "syncroom.next", "title": "%command.next%", "category": "SyncRoom"},
-      {"command": "syncroom.togglePlayer", "title": "%command.togglePlayer%", "category": "SyncRoom"},
-      {"command": "syncroom.copyCode", "title": "%command.copyCode%", "category": "SyncRoom"},
-      {"command": "syncroom.showLog", "title": "%command.showLog%", "category": "SyncRoom"}
+      {
+        "command": "syncroom.createRoom",
+        "title": "%command.createRoom%",
+        "category": "SyncRoom"
+      },
+      {
+        "command": "syncroom.joinRoom",
+        "title": "%command.joinRoom%",
+        "category": "SyncRoom"
+      },
+      {
+        "command": "syncroom.leaveRoom",
+        "title": "%command.leaveRoom%",
+        "category": "SyncRoom"
+      },
+      {
+        "command": "syncroom.addLink",
+        "title": "%command.addLink%",
+        "category": "SyncRoom"
+      },
+      {
+        "command": "syncroom.togglePlay",
+        "title": "%command.togglePlay%",
+        "category": "SyncRoom"
+      },
+      {
+        "command": "syncroom.next",
+        "title": "%command.next%",
+        "category": "SyncRoom"
+      },
+      {
+        "command": "syncroom.togglePlayer",
+        "title": "%command.togglePlayer%",
+        "category": "SyncRoom"
+      },
+      {
+        "command": "syncroom.copyCode",
+        "title": "%command.copyCode%",
+        "category": "SyncRoom"
+      },
+      {
+        "command": "syncroom.showLog",
+        "title": "%command.showLog%",
+        "category": "SyncRoom"
+      }
     ],
     "menus": {
       "commandPalette": [
-        {"command": "syncroom.leaveRoom", "when": "syncroom.inRoom"},
-        {"command": "syncroom.addLink", "when": "syncroom.inRoom"},
-        {"command": "syncroom.togglePlay", "when": "syncroom.inRoom"},
-        {"command": "syncroom.next", "when": "syncroom.inRoom"},
-        {"command": "syncroom.togglePlayer", "when": "syncroom.inRoom"},
-        {"command": "syncroom.copyCode", "when": "syncroom.inRoom"}
+        {
+          "command": "syncroom.leaveRoom",
+          "when": "syncroom.inRoom"
+        },
+        {
+          "command": "syncroom.addLink",
+          "when": "syncroom.inRoom"
+        },
+        {
+          "command": "syncroom.togglePlay",
+          "when": "syncroom.inRoom"
+        },
+        {
+          "command": "syncroom.next",
+          "when": "syncroom.inRoom"
+        },
+        {
+          "command": "syncroom.togglePlayer",
+          "when": "syncroom.inRoom"
+        },
+        {
+          "command": "syncroom.copyCode",
+          "when": "syncroom.inRoom"
+        }
       ]
     },
     "viewsContainers": {
-      "activitybar": [{"id": "syncroom", "title": "SyncRoom", "icon": "media/syncroom.svg"}]
+      "activitybar": [
+        {
+          "id": "syncroom",
+          "title": "SyncRoom",
+          "icon": "media/syncroom.svg"
+        }
+      ]
     },
     "views": {
-      "syncroom": [{"type": "webview", "id": "syncroom.sidebar", "name": "%view.name%"}]
+      "syncroom": [
+        {
+          "type": "webview",
+          "id": "syncroom.sidebar",
+          "name": "%view.name%"
+        }
+      ]
     },
     "configuration": {
       "title": "SyncRoom",
@@ -69,7 +152,10 @@
         },
         "syncroom.relays": {
           "type": "array",
-          "items": {"type": "string", "pattern": "^wss://"},
+          "items": {
+            "type": "string",
+            "pattern": "^wss://"
+          },
           "default": [
             "wss://relay.damus.io",
             "wss://relay.primal.net",
@@ -105,5 +191,8 @@
     "typescript": "7.0.2",
     "vitest": "5.0.3",
     "ws": "8.22.0"
+  },
+  "dependencies": {
+    "fractional-indexing": "4.0.0"
   }
 }

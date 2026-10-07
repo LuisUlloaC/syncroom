@@ -5,7 +5,7 @@ import type {VideoMeta} from './types'
 
 const meta: VideoMeta = {videoId: 'M7lc1UVf-VE', title: 'A song', author: 'Someone'}
 const stamp = {counter: 1, peerId: 'a'}
-const track = {id: 'a:1', videoId: 'M7lc1UVf-VE', title: 'A song', author: 'Someone', addedBy: 'Ana', order: stamp}
+const track = {id: 'a:1', videoId: 'M7lc1UVf-VE', title: 'A song', author: 'Someone', addedBy: 'Ana', order: stamp, rank: 'a0', moved: stamp}
 const wire = {trackId: 'a:1', playing: true, positionS: 3, ageMs: 10, stamp}
 
 describe('isRoomMessage', () => {
@@ -17,6 +17,8 @@ describe('isRoomMessage', () => {
       ...a.join(),
       ...a.addTracks([meta]),
       ...a.seek(5),
+      ...a.addTracks([{...meta, videoId: 'bbbbbbbbbbb'}]),
+      ...a.moveTrack(a.queue()[1]?.id ?? '', null, a.queue()[0]?.id ?? null),
       ...a.removeTrack(a.queue()[0]?.id ?? ''),
       ...a.leave(),
       ...b.join().flatMap(o => a.receive(o.msg, 'relay')),
@@ -51,6 +53,13 @@ describe('isRoomMessage', () => {
     ['track with float counter', {type: 'add', from: 'a', tracks: [{...track, order: {counter: 1.5, peerId: 'a'}}]}],
     ['track with negative counter', {type: 'add', from: 'a', tracks: [{...track, order: {counter: -1, peerId: 'a'}}]}],
     ['remove without id', {type: 'remove', from: 'a'}],
+    ['track without rank', {type: 'add', from: 'a', tracks: [{...track, rank: undefined}]}],
+    ['track with non-base62 rank', {type: 'add', from: 'a', tracks: [{...track, rank: 'a0/..'}]}],
+    ['track with huge rank', {type: 'add', from: 'a', tracks: [{...track, rank: 'a'.repeat(257)}]}],
+    ['move without rank', {type: 'move', from: 'a', trackId: 'a:1', moved: {counter: 2, peerId: 'a'}}],
+    ['move with empty rank', {type: 'move', from: 'a', trackId: 'a:1', rank: '', moved: {counter: 2, peerId: 'a'}}],
+    ['move with bad stamp', {type: 'move', from: 'a', trackId: 'a:1', rank: 'a1', moved: {counter: 'x', peerId: 'a'}}],
+    ['move without trackId', {type: 'move', from: 'a', rank: 'a1', moved: {counter: 2, peerId: 'a'}}],
     ['playback with NaN position', {type: 'playback', from: 'a', playback: {...wire, positionS: Number.NaN}}],
     ['playback with negative position', {type: 'playback', from: 'a', playback: {...wire, positionS: -1}}],
     ['playback with negative age', {type: 'playback', from: 'a', playback: {...wire, ageMs: -1}}],
