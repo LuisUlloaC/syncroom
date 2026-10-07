@@ -38,6 +38,16 @@ export function webviewStrings(): Record<string, string> {
     'queue.playNow': t('Play now'),
     'queue.remove': t('Remove from queue'),
     'queue.addedBy': t('added by {0}', '{0}'),
-    'queue.unplayable': t('not available for you')
+    'queue.unplayable': t('not available for you'),
+    'queue.playNext': t('Play next'),
+    'queue.drag': t('Drag to reorder'),
+    'chat.title': t('Chat'),
+    'chat.show': t('Show chat'),
+    'chat.hide': t('Hide chat'),
+    'chat.empty': t('No messages yet.'),
+    'chat.placeholder': t('Message the room'),
+    'chat.send': t('Send'),
+    'chat.joined': t('{0} joined', '{0}'),
+    'chat.left': t('{0} left', '{0}')
   }
 }

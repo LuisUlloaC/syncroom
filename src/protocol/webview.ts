@@ -21,3 +21,7 @@ export type WebviewToHost =
   | {t: 'copyCode'}
   | {t: 'togglePlayer'}
   | {t: 'rename'; name: string}
+  /** Colocar entre `beforeId` (delante; null = principio) y `afterId` (detrás; null = final). */
+  | {t: 'move'; trackId: string; beforeId: string | null; afterId: string | null}
+  | {t: 'playNext'; trackId: string}
+  | {t: 'say'; text: string}

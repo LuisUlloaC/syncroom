@@ -76,7 +76,17 @@
       'queue.playNow': 'Play now',
       'queue.remove': 'Remove from queue',
       'queue.addedBy': 'added by {0}',
-      'queue.unplayable': 'not available for you'
+      'queue.unplayable': 'not available for you',
+      'queue.playNext': 'Play next',
+      'queue.drag': 'Drag to reorder',
+      'chat.title': 'Chat',
+      'chat.show': 'Show chat',
+      'chat.hide': 'Hide chat',
+      'chat.empty': 'No messages yet.',
+      'chat.placeholder': 'Message the room',
+      'chat.send': 'Send',
+      'chat.joined': '{0} joined',
+      'chat.left': '{0} left'
     }
     const track = (n, videoId, title, author, addedBy, extra) =>
       Object.assign({id: 'p:' + n, videoId, title, author, addedBy, current: false, unplayable: false}, extra)
@@ -92,6 +102,12 @@
         track(4, 'aaaaaaaaaaa', 'Blocked in your country', 'Label', 'Dayana', {unplayable: true})
       ],
       playback: {trackId: 'p:1', playing: true, positionS: 84, durationS: 1344},
+      chat: [
+        {id: 'j1', kind: 'joined', from: 'a', name: 'Dayana', text: '', at: Date.now() - 600000, mine: false},
+        {id: 'c1', kind: 'message', from: 'a', name: 'Dayana', text: 'pon algo de Creepy Nuts', at: Date.now() - 300000, mine: false},
+        {id: 'c2', kind: 'message', from: 'me', name: 'Luis', text: 'va, la siguiente es tuya. Este mensaje es largo para ver cómo parte en varias líneas sin desbordar la barra.', at: Date.now() - 120000, mine: true},
+        {id: 'c3', kind: 'message', from: 'a', name: 'Dayana', text: '🔥', at: Date.now() - 5000, mine: false}
+      ],
       engineReady: true,
       fault: undefined,
       net: {directPeers: 1, relaysOk: 4},
@@ -101,7 +117,10 @@
     const wanted = new URLSearchParams(location.search).get('state')
     const state = wanted === 'lobby' ? {inRoom: false} : {inRoom: true, room, playerVisible: false}
     // Igual que el host real: responde con el estado cuando la vista dice «ready».
+    let saved
     window.acquireVsCodeApi = () => ({
+      getState: () => saved,
+      setState: value => (saved = value),
       postMessage: message => {
         console.log('to host', message)
         if (message.t === 'ready') window.postMessage({t: 'state', state}, '*')

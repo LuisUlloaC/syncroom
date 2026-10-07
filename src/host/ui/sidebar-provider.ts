@@ -78,6 +78,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'rename':
         await this.actions.changeName(msg.name)
         break
+      case 'move':
+        this.actions.move(msg.trackId, msg.beforeId, msg.afterId)
+        break
+      case 'playNext':
+        this.actions.playNext(msg.trackId)
+        break
+      case 'say':
+        this.actions.say(msg.text)
+        break
     }
   }
 

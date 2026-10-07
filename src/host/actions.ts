@@ -86,6 +86,18 @@ export class Actions {
     this.controller.session?.remove(trackId)
   }
 
+  move(trackId: string, beforeId: string | null, afterId: string | null): void {
+    this.controller.session?.move(trackId, beforeId, afterId)
+  }
+
+  playNext(trackId: string): void {
+    this.controller.session?.playNext(trackId)
+  }
+
+  say(text: string): void {
+    this.controller.session?.say(text)
+  }
+
   seek(positionS: number): void {
     if (Number.isFinite(positionS)) this.controller.session?.seek(positionS)
   }

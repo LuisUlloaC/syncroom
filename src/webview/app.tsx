@@ -1,11 +1,19 @@
-import {useEffect, useState} from 'preact/hooks'
+import {useEffect, useRef, useState} from 'preact/hooks'
 import {formatRoomCode} from '../core/ids'
-import type {RoomView, TrackView} from '../host/session'
+import type {ChatLine, RoomView, TrackView} from '../host/session'
 import type {HostToWebview, ViewState, WebviewToHost} from '../protocol/webview'
 import {clock, thumbnail} from './format'
 import {Icon} from './icons'
 
-declare function acquireVsCodeApi(): {postMessage(message: WebviewToHost): void}
+interface Persisted {
+  chatOpen?: boolean
+}
+
+declare function acquireVsCodeApi(): {
+  postMessage(message: WebviewToHost): void
+  getState(): Persisted | undefined
+  setState(state: Persisted): void
+}
 
 const vscode = acquireVsCodeApi()
 const strings = (window as Window & {__SYNCROOM_STRINGS__?: Record<string, string>}).__SYNCROOM_STRINGS__ ?? {}
@@ -143,6 +151,7 @@ function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
 
       <AddLink />
       <Queue tracks={room.tracks} />
+      <Chat lines={room.chat} />
     </main>
   )
 }
@@ -234,7 +243,32 @@ function AddLink() {
   )
 }
 
+interface DropTarget {
+  id: string
+  side: 'before' | 'after'
+}
+
 function Queue({tracks}: {tracks: TrackView[]}) {
+  const [dragging, setDragging] = useState<string | undefined>(undefined)
+  const [target, setTarget] = useState<DropTarget | undefined>(undefined)
+  const currentIndex = tracks.findIndex(track => track.current)
+  const nextId = tracks[currentIndex + 1]?.id
+
+  const finish = (): void => {
+    setDragging(undefined)
+    setTarget(undefined)
+  }
+
+  const drop = (): void => {
+    if (dragging === undefined || target === undefined || target.id === dragging) return finish()
+    const others = tracks.filter(track => track.id !== dragging)
+    const at = others.findIndex(track => track.id === target.id)
+    const before = target.side === 'before' ? others[at - 1] : others[at]
+    const after = target.side === 'before' ? others[at] : others[at + 1]
+    post({t: 'move', trackId: dragging, beforeId: before?.id ?? null, afterId: after?.id ?? null})
+    finish()
+  }
+
   return (
     <section class="queue">
       <h3>
@@ -244,23 +278,156 @@ function Queue({tracks}: {tracks: TrackView[]}) {
         <p class="hint">{s('queue.empty')}</p>
       ) : (
         <ol>
-          {tracks.map((track, index) => (
-            <li key={track.id} class={track.current ? 'current' : undefined}>
-              <span class="n">{index + 1}</span>
-              <button class="pick" disabled={track.current} onClick={() => post({t: 'playNow', trackId: track.id})} title={s('queue.playNow')}>
-                <span class="t">{track.title}</span>
-                <span class="m">
-                  {[track.author, s('queue.addedBy').replace('{0}', track.addedBy), track.unplayable ? s('queue.unplayable') : '']
-                    .filter(part => part !== '')
-                    .join(' · ')}
+          {tracks.map((track, index) => {
+            const classes = [
+              track.current ? 'current' : '',
+              dragging === track.id ? 'dragging' : '',
+              target?.id === track.id && dragging !== track.id ? `drop-${target.side}` : ''
+            ]
+              .filter(part => part !== '')
+              .join(' ')
+            return (
+              <li
+                key={track.id}
+                class={classes === '' ? undefined : classes}
+                draggable
+                onDragStart={event => {
+                  setDragging(track.id)
+                  if (event.dataTransfer !== null) {
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData('text/plain', track.id)
+                  }
+                }}
+                onDragOver={event => {
+                  if (dragging === undefined) return
+                  event.preventDefault()
+                  const box = event.currentTarget.getBoundingClientRect()
+                  const side = event.clientY < box.top + box.height / 2 ? 'before' : 'after'
+                  if (target?.id !== track.id || target.side !== side) setTarget({id: track.id, side})
+                }}
+                onDrop={event => {
+                  event.preventDefault()
+                  drop()
+                }}
+                onDragEnd={finish}
+              >
+                <span class="n" title={s('queue.drag')}>
+                  <span class="num">{index + 1}</span>
+                  <Icon name="grip" />
                 </span>
-              </button>
-              <button class="icon" onClick={() => post({t: 'remove', trackId: track.id})} title={s('queue.remove')} aria-label={s('queue.remove')}>
-                <Icon name="trash" />
-              </button>
-            </li>
-          ))}
+                <button class="pick" disabled={track.current} onClick={() => post({t: 'playNow', trackId: track.id})} title={s('queue.playNow')}>
+                  <span class="t">{track.title}</span>
+                  <span class="m">
+                    {[track.author, s('queue.addedBy').replace('{0}', track.addedBy), track.unplayable ? s('queue.unplayable') : '']
+                      .filter(part => part !== '')
+                      .join(' · ')}
+                  </span>
+                </button>
+                <span class="tools">
+                  {!track.current && track.id !== nextId && (
+                    <button class="icon" onClick={() => post({t: 'playNext', trackId: track.id})} title={s('queue.playNext')} aria-label={s('queue.playNext')}>
+                      <Icon name="up" />
+                    </button>
+                  )}
+                  <button class="icon" onClick={() => post({t: 'remove', trackId: track.id})} title={s('queue.remove')} aria-label={s('queue.remove')}>
+                    <Icon name="trash" />
+                  </button>
+                </span>
+              </li>
+            )
+          })}
         </ol>
+      )}
+    </section>
+  )
+}
+
+const time = (at: number): string => new Date(at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
+
+function Chat({lines}: {lines: ChatLine[]}) {
+  const [open, setOpen] = useState<boolean>(() => vscode.getState()?.chatOpen ?? true)
+  const [text, setText] = useState('')
+  // Cuántas líneas había la última vez que el panel estuvo abierto: lo que llegue después cuenta como no leído.
+  const [seen, setSeen] = useState(lines.length)
+  const list = useRef<HTMLOListElement>(null)
+  const stuck = useRef(true)
+
+  useEffect(() => {
+    vscode.setState({...vscode.getState(), chatOpen: open})
+    if (open) setSeen(lines.length)
+  }, [open, lines.length])
+
+  useEffect(() => {
+    const el = list.current
+    if (el !== null && stuck.current) el.scrollTop = el.scrollHeight
+  }, [lines.length, open])
+
+  const unread = open ? 0 : lines.slice(seen).filter(line => line.kind === 'message' && !line.mine).length
+
+  const send = (): void => {
+    const clean = text.trim()
+    if (clean === '') return
+    post({t: 'say', text: clean})
+    setText('')
+    stuck.current = true
+  }
+
+  return (
+    <section class={open ? 'chat open' : 'chat'}>
+      <h3>
+        <button class="fold" onClick={() => setOpen(!open)} aria-expanded={open} title={open ? s('chat.hide') : s('chat.show')}>
+          <Icon name="chevron" />
+          {s('chat.title')}
+          {unread > 0 && <span class="unread">{unread}</span>}
+        </button>
+      </h3>
+      {open && (
+        <>
+          {lines.length === 0 ? (
+            <p class="hint">{s('chat.empty')}</p>
+          ) : (
+            <ol
+              ref={list}
+              onScroll={event => {
+                const el = event.currentTarget
+                stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8
+              }}
+            >
+              {lines.map(line =>
+                line.kind === 'message' ? (
+                  <li key={line.id} class={line.mine ? 'line mine' : 'line'}>
+                    <span class="who">{line.name === '' ? s('room.unnamed') : line.name}</span>
+                    <span class="when">{time(line.at)}</span>
+                    <span class="text">{line.text}</span>
+                  </li>
+                ) : (
+                  <li key={line.id} class="system">
+                    {(line.kind === 'joined' ? s('chat.joined') : s('chat.left')).replace('{0}', line.name)}
+                  </li>
+                )
+              )}
+            </ol>
+          )}
+          <form
+            class="say"
+            onSubmit={event => {
+              event.preventDefault()
+              send()
+            }}
+          >
+            <input
+              value={text}
+              maxLength={500}
+              placeholder={s('chat.placeholder')}
+              aria-label={s('chat.placeholder')}
+              autocomplete="off"
+              onInput={event => setText(event.currentTarget.value)}
+            />
+            <button type="submit" class="icon" disabled={text.trim() === ''} title={s('chat.send')} aria-label={s('chat.send')}>
+              <Icon name="send" />
+            </button>
+          </form>
+        </>
       )}
     </section>
   )

@@ -219,6 +219,14 @@ export class RoomSession {
     this.sendAll(this.state.removeTrack(trackId))
   }
 
+  move(trackId: string, beforeId: string | null, afterId: string | null): void {
+    this.sendAll(this.state.moveTrack(trackId, beforeId, afterId))
+  }
+
+  playNext(trackId: string): void {
+    this.sendAll(this.state.playNext(trackId))
+  }
+
   seek(positionS: number): void {
     this.sendAll(this.state.seek(positionS))
   }
