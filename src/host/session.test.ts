@@ -469,6 +469,85 @@ describe('renaming', () => {
   })
 })
 
+describe('chat', () => {
+  const lines = (session: RoomSession) => session.view().chat.map(l => [l.kind, l.name, l.text, l.mine] as const)
+
+  it('say trims, caps at 500 characters, ignores empty text and tells the room', () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    link.take()
+    session.say('  hola  ')
+    session.say('   ')
+    session.say('y'.repeat(600))
+    const sent = roomMessages(link.take())
+    expect(sent.map(m => m.type)).toEqual(['chat', 'chat'])
+    expect(sent[0]).toMatchObject({type: 'chat', from: 'me', name: 'Me', text: 'hola'})
+    expect(sent[1]?.type === 'chat' ? sent[1].text.length : 0).toBe(500)
+    expect(lines(session)).toEqual([
+      ['message', 'Me', 'hola', true],
+      ['message', 'Me', 'y'.repeat(500), true]
+    ])
+    expect(session.view().chat.every(l => l.at === Date.now())).toBe(true)
+  })
+
+  it('shows incoming chat with the sender name and falls back to the known peer name', () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    link.take()
+    const other = remotePeer('other')
+    for (const o of other.join()) link.emit({t: 'msg', msg: o.msg, via: 'relay'})
+    link.emit({t: 'msg', msg: other.chatMessage('qué tal').msg, via: 'relay'})
+    link.emit({t: 'msg', msg: {type: 'chat', from: 'other', name: '', id: 'other:77', text: 'sin nombre'}, via: 'relay'})
+    link.emit({t: 'msg', msg: {type: 'chat', from: 'ghost', name: '', id: 'ghost:1', text: 'anónimo'}, via: 'relay'})
+    expect(lines(session).filter(l => l[0] === 'message')).toEqual([
+      ['message', 'OTHER', 'qué tal', false],
+      ['message', 'OTHER', 'sin nombre', false],
+      ['message', '', 'anónimo', false]
+    ])
+  })
+
+  it('announces arrivals once they have a name, and departures', () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    link.take()
+    // Primero llega un ping (sin nombre): todavía no se anuncia nada.
+    link.emit({t: 'msg', msg: {type: 'ping', from: 'other', to: 'me', t0: 1}, via: 'direct'})
+    expect(lines(session)).toEqual([])
+    const other = remotePeer('other')
+    for (const o of other.join()) link.emit({t: 'msg', msg: o.msg, via: 'direct'})
+    for (const o of other.heartbeat(false)) link.emit({t: 'msg', msg: o.msg, via: 'direct'})
+    expect(lines(session)).toEqual([['joined', 'OTHER', '', false]])
+    for (const o of other.leave()) link.emit({t: 'msg', msg: o.msg, via: 'direct'})
+    expect(lines(session)).toEqual([
+      ['joined', 'OTHER', '', false],
+      ['left', 'OTHER', '', false]
+    ])
+    // Vuelve: se anuncia otra vez.
+    for (const o of other.join()) link.emit({t: 'msg', msg: o.msg, via: 'direct'})
+    expect(lines(session).map(l => l[0])).toEqual(['joined', 'left', 'joined'])
+  })
+
+  it('announces a peer that silently times out as left', () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    link.take()
+    const other = remotePeer('other')
+    for (const o of other.join()) link.emit({t: 'msg', msg: o.msg, via: 'direct'})
+    vi.advanceTimersByTime(40_000)
+    expect(lines(session).map(l => l[0])).toEqual(['joined', 'left'])
+  })
+
+  it('keeps only the last 200 lines', () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    for (let i = 0; i < 230; i++) session.say(`m${i}`)
+    const chat = session.view().chat
+    expect(chat).toHaveLength(200)
+    expect(chat[0]?.text).toBe('m30')
+    expect(chat.at(-1)?.text).toBe('m229')
+  })
+})
+
 describe('command/status feedback', () => {
   // Imita el ida y vuelta real por loopback: cada orden provoca un «status» ~1 ms después,
   // y YouTube aún no ha reaccionado (sigue en el estado anterior).

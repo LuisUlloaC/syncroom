@@ -5,6 +5,7 @@ const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
 const MAX_ID = 64
 const MAX_NAME = 40
 const MAX_TITLE = 300
+export const MAX_CHAT = 500
 const MAX_TRACKS = 500
 const MAX_RANK = 256
 /** Alfabeto base62 de fractional-indexing. */
@@ -90,6 +91,8 @@ export function isRoomMessage(value: unknown): value is RoomMessage {
       return isId(value.trackId)
     case 'move':
       return isId(value.trackId) && isRank(value.rank) && isStamp(value.moved)
+    case 'chat':
+      return isText(value.name, MAX_NAME) && isId(value.id) && isText(value.text, MAX_CHAT) && value.text.length > 0
     case 'playback':
       return isPlaybackWire(value.playback)
     case 'ping':

@@ -52,6 +52,7 @@ export type RoomMessage =
   | {type: 'remove'; from: PeerId; trackId: string}
   | {type: 'move'; from: PeerId; trackId: string; rank: string; moved: Stamp}
   | {type: 'playback'; from: PeerId; playback: PlaybackWire}
+  | {type: 'chat'; from: PeerId; name: string; id: string; text: string}
   | {type: 'ping'; from: PeerId; to: PeerId; t0: number}
   | {type: 'pong'; from: PeerId; to: PeerId; t0: number}
   | {type: 'bye'; from: PeerId}

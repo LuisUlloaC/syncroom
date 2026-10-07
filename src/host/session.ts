@@ -1,7 +1,7 @@
 import {RoomState} from '../core/room-state'
 import {reconcile, type Desired, type PlayerStatus} from '../core/sync'
 import type {Outgoing, Peer} from '../core/types'
-import {isRoomMessage} from '../core/validate'
+import {MAX_CHAT, isRoomMessage} from '../core/validate'
 import type {EngineLink, EngineToHost} from '../protocol/bridge'
 import type {ResolvedLink} from '../resolve/youtube'
 
@@ -32,11 +32,24 @@ export interface TrackView {
   unplayable: boolean
 }
 
+export interface ChatLine {
+  id: string
+  kind: 'message' | 'joined' | 'left'
+  from: string
+  name: string
+  /** Vacío en joined/left. */
+  text: string
+  /** Hora local de llegada: no hay reloj común. */
+  at: number
+  mine: boolean
+}
+
 export interface RoomView {
   code: string
   me: Peer
   peers: Peer[]
   tracks: TrackView[]
+  chat: ChatLine[]
   playback: {trackId: string | null; playing: boolean; positionS: number; durationS: number}
   engineReady: boolean
   /** Código del fallo que impide reproducir aunque el motor esté en marcha. */
@@ -55,6 +68,7 @@ const TIGHT_TOLERANCE_S = 0.75
 const DRIFT_TOLERANCE_S = 2
 const LOAD_GRACE_MS = 1500
 const DEFAULT_READY_TIMEOUT_MS = 20_000
+const MAX_CHAT_LINES = 200
 /** Códigos del IFrame API: parámetro inválido, error HTML5, no existe, incrustación prohibida (x2). */
 const UNPLAYABLE_CODES = new Set([2, 5, 100, 101, 150])
 
@@ -84,6 +98,10 @@ export class RoomSession {
   private unsubscribe: (() => void) | undefined
   private lastPlaybackKey = ''
   private loadGraceUntil = 0
+  private chat: ChatLine[] = []
+  private chatSeq = 0
+  /** Participantes ya anunciados en el chat (id → nombre), para detectar llegadas y salidas. */
+  private announced = new Map<string, string>()
 
   constructor(private readonly opts: SessionOptions) {
     this.now = opts.now ?? (() => Date.now())
@@ -142,6 +160,7 @@ export class RoomSession {
       code: this.opts.code,
       me: {id: this.opts.peerId, name: this.name},
       peers: this.state.peerList(),
+      chat: this.chat,
       tracks: this.state.queue().map(track => ({
         id: track.id,
         videoId: track.videoId,
@@ -213,6 +232,17 @@ export class RoomSession {
     this.emit()
   }
 
+  /** Manda un mensaje de chat (recortado y acotado a 500 caracteres); vacío se ignora. */
+  say(text: string): void {
+    const clean = text.trim().slice(0, MAX_CHAT)
+    if (clean === '') return
+    const out = this.state.chatMessage(clean)
+    const id = out.msg.type === 'chat' ? out.msg.id : `${this.opts.peerId}:${this.chatSeq}`
+    this.pushChat({id, kind: 'message', from: this.opts.peerId, name: this.name, text: clean, at: this.now(), mine: true})
+    this.sendAll([out])
+    this.emit()
+  }
+
   setVolume(value: number): void {
     this.volume = clampVolume(value)
     if (this.engineReady) this.opts.link.send({t: 'volume', value: this.volume})
@@ -238,7 +268,12 @@ export class RoomSession {
         this.emit()
         break
       case 'msg':
-        if (isRoomMessage(msg.msg)) this.sendAll(this.state.receive(msg.msg, msg.via))
+        if (!isRoomMessage(msg.msg)) break
+        if (msg.msg.type === 'chat' && msg.msg.from !== this.opts.peerId) {
+          const name = msg.msg.name !== '' ? msg.msg.name : this.state.peerName(msg.msg.from)
+          this.pushChat({id: msg.msg.id, kind: 'message', from: msg.msg.from, name, text: msg.msg.text, at: this.now(), mine: false})
+        }
+        this.sendAll(this.state.receive(msg.msg, msg.via))
         break
       case 'status': {
         if (this.now() < this.loadGraceUntil && msg.status.videoId !== this.status?.videoId) break
@@ -298,7 +333,25 @@ export class RoomSession {
     }
   }
 
+  /** Compara los participantes con nombre contra los ya anunciados y escribe «entró» / «salió». */
+  private announcePresence(): void {
+    const present = new Map(this.state.peerList().filter(p => p.id !== this.opts.peerId && p.name !== '').map(p => [p.id, p.name]))
+    for (const [id, name] of present) {
+      if (!this.announced.has(id)) this.pushChat({id: `joined:${id}:${this.chatSeq}`, kind: 'joined', from: id, name, text: '', at: this.now(), mine: false})
+    }
+    for (const [id, name] of this.announced) {
+      if (!present.has(id)) this.pushChat({id: `left:${id}:${this.chatSeq}`, kind: 'left', from: id, name, text: '', at: this.now(), mine: false})
+    }
+    this.announced = present
+  }
+
+  private pushChat(line: ChatLine): void {
+    this.chatSeq += 1
+    this.chat = [...this.chat.slice(-(MAX_CHAT_LINES - 1)), line]
+  }
+
   private onStateChange(): void {
+    this.announcePresence()
     const stamp = this.state.getPlayback().stamp
     const key = `${stamp.counter}:${stamp.peerId}:${this.state.currentTrack()?.id ?? ''}`
     if (key !== this.lastPlaybackKey) {

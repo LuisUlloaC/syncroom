@@ -117,6 +117,20 @@ export class RoomState {
     return [{msg: {type: 'bye', from: this.opts.peerId}, relay: true}]
   }
 
+  /** Mensaje de chat con un id único por emisor (del reloj de Lamport). No se guarda aquí. */
+  chatMessage(text: string): Outgoing {
+    const stamp = this.clock.tick()
+    return {
+      msg: {type: 'chat', from: this.opts.peerId, name: this.name, id: `${stamp.peerId}:${stamp.counter}`, text},
+      relay: true
+    }
+  }
+
+  /** Nombre conocido de un participante, o '' si no se sabe. */
+  peerName(id: PeerId): string {
+    return this.peers.get(id)?.name ?? ''
+  }
+
   /** `startIndex`: cuál suena primero si la sala estaba parada (por defecto, la primera añadida). */
   addTracks(metas: VideoMeta[], startIndex = 0): Outgoing[] {
     const live = this.queue()
@@ -298,6 +312,10 @@ export class RoomState {
         if (isNew) this.emit()
         return out
       }
+      case 'chat':
+        // El texto lo guarda la sesión; aquí solo cuenta como señal de vida y de nombre.
+        if (msg.name !== '') this.peers.set(msg.from, {name: msg.name, seenAt: now})
+        break
       case 'bye':
         this.peers.delete(msg.from)
         this.latency.delete(msg.from)
