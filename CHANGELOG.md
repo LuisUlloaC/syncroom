@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Reorder the queue: drag tracks, or use "Play next" to put one right after the current track.
+- Change your name from the sidebar (click it) or with "SyncRoom: Change Name…".
+- Chat with the people in the room. Messages are not stored: you see what arrives while you are in the room.
+
 ## 0.2.0
 
 - Fixed: joining or starting a video could freeze VS Code (a command/status loop between the extension and the player).

@@ -7,7 +7,7 @@ Listen to YouTube together without leaving VS Code. One person creates a room, s
 
 1. Open the **SyncRoom** view in the activity bar and choose **Create room**.
 2. Send the room code to your friends. They choose **Join** and type it.
-3. Paste a YouTube video or playlist link. Anyone in the room can add, skip, pause or seek.
+3. Paste a YouTube video or playlist link. Anyone in the room can add, reorder, skip, pause or seek, and chat in the sidebar.
 
 There is no account and no SyncRoom server. Rooms exist only while someone is in them.
 
@@ -30,6 +30,7 @@ There is no account and no SyncRoom server. Rooms exist only while someone is in
 | SyncRoom: Next Track | Skip for everyone |
 | SyncRoom: Show or Hide Player Window | Toggle the small YouTube window |
 | SyncRoom: Copy Room Code | Copy the code to share it |
+| SyncRoom: Change Name… | Change the name the others see |
 | SyncRoom: Leave Room | Stop listening |
 
 ## Settings

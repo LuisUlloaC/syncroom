@@ -15,6 +15,8 @@ export const VIDEO: VideoMeta = {
   title: 'Embedded Web Player Customization',
   author: 'Google for Developers'
 }
+/** Segundo vídeo incrustable (el primero subido a YouTube). */
+export const SECOND_VIDEO: VideoMeta = {videoId: 'jNQXAC9IVRw', title: 'Me at the zoo', author: 'jawed'}
 
 export interface TestPeer {
   session: RoomSession
@@ -33,6 +35,8 @@ export interface PeerOptions {
   /** Por defecto oculto; SYNCROOM_E2E_VISIBLE=1 abre la mini ventana para depurar con las DevTools. */
   visible?: boolean
   extraArgs?: string[]
+  /** Lo que devuelve cada addLink; por defecto, VIDEO. */
+  videos?: VideoMeta[]
 }
 
 export async function startPeer(options: PeerOptions): Promise<TestPeer> {
@@ -55,7 +59,7 @@ export async function startPeer(options: PeerOptions): Promise<TestPeer> {
     relays: DEFAULT_RELAYS,
     volume: 0,
     link: bridge,
-    resolve: async () => ({metas: [VIDEO], truncated: false, startIndex: 0})
+    resolve: async () => ({metas: options.videos ?? [VIDEO], truncated: false, startIndex: 0})
   })
   session.start()
   const visible = options.visible ?? process.env.SYNCROOM_E2E_VISIBLE === '1'
