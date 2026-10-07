@@ -2,7 +2,7 @@
   "name": "syncroom",
   "displayName": "SyncRoom",
   "description": "%description%",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "luisulloac",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -121,6 +121,11 @@
           "id": "syncroom",
           "title": "SyncRoom",
           "icon": "media/syncroom.svg"
+        },
+        {
+          "id": "syncroom-chat",
+          "title": "SyncRoom Chat",
+          "icon": "media/syncroom-chat.svg"
         }
       ]
     },
@@ -130,6 +135,13 @@
           "type": "webview",
           "id": "syncroom.sidebar",
           "name": "%view.name%"
+        }
+      ],
+      "syncroom-chat": [
+        {
+          "type": "webview",
+          "id": "syncroom.chat",
+          "name": "%view.chat%"
         }
       ]
     },

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- The chat has its own icon in the activity bar, with a badge for unread messages. It no longer sits under the queue.
+
 ## 0.3.0
 
 - Reorder the queue: drag tracks, or use "Play next" to put one right after the current track.

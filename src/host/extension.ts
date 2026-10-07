@@ -13,8 +13,13 @@ export function activate(context: vscode.ExtensionContext): void {
     controller,
     vscode.window.registerWebviewViewProvider(
       SidebarProvider.viewId,
-      new SidebarProvider(context.extensionUri, controller, actions),
+      new SidebarProvider(context.extensionUri, controller, actions, 'room'),
       // La vista conserva su estado al ocultarse; el audio no depende de ella.
+      {webviewOptions: {retainContextWhenHidden: true}}
+    ),
+    vscode.window.registerWebviewViewProvider(
+      SidebarProvider.chatViewId,
+      new SidebarProvider(context.extensionUri, controller, actions, 'chat'),
       {webviewOptions: {retainContextWhenHidden: true}}
     ),
     createStatusBar(controller),

@@ -11,6 +11,7 @@
   "command.changeName": "Change Name…",
   "command.showLog": "Show Log",
   "view.name": "Room",
+  "view.chat": "Chat",
   "config.displayName": "Name shown to the other people in a room. If empty, SyncRoom asks the first time.",
   "config.browserPath": "Full path to a Chromium-based browser (Edge, Chrome, Brave, Chromium) used to play audio. Leave empty to find one automatically.",
   "config.directConnections": "Connect directly to the other people in the room (WebRTC). Faster, but they can see your IP address. Turn off to use relays only.",

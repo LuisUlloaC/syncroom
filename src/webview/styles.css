@@ -159,27 +159,15 @@ input[type='range'] { width: 100%; min-width: 0; margin: 0; accent-color: var(--
 .queue li .icon { visibility: hidden; }
 .queue li:hover .icon, .queue li:focus-within .icon { visibility: visible; }
 
-/* ── Chat ─────────────────────────────────────────────────── */
+/* ── Chat (vista propia, segundo icono de la barra) ───────── */
 
-.chat { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
-.chat h3 .fold {
-  display: flex; align-items: center; gap: 0.4em;
-  padding: 0; border: 0; background: none; color: inherit;
-  font: inherit; letter-spacing: inherit; text-transform: inherit;
-}
-.chat h3 .fold:hover:not(:disabled) { background: none; color: var(--vscode-foreground); }
-.chat h3 .fold .ico { transition: transform 120ms; transform: rotate(-90deg); }
-.chat.open h3 .fold .ico { transform: none; }
-.chat .unread {
-  min-width: 1.6em; padding: 0 0.4em; border-radius: 1em;
-  background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
-  font-size: 0.9em; letter-spacing: 0; text-align: center; text-transform: none;
-}
+.chatview { height: 100vh; padding-bottom: 0.9rem; }
+.chatview > .hint { color: var(--vscode-descriptionForeground); }
+.chat { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 0.5rem; min-height: 0; }
 .chat .hint { color: var(--vscode-descriptionForeground); }
 .chat ol {
-  display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.35rem; align-content: start;
-  max-height: 14rem; margin: 0; padding: 0.4rem 0.1rem 0.4rem 0; overflow-y: auto; list-style: none;
-  border-top: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.35rem; align-content: end;
+  min-height: 0; margin: 0; padding: 0.4rem 0.1rem 0.4rem 0; overflow-y: auto; list-style: none;
   border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
 }
 .chat .line { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.5rem; }

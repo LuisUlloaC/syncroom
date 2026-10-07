@@ -2,23 +2,17 @@ import {useEffect, useRef, useState} from 'preact/hooks'
 import {formatRoomCode} from '../core/ids'
 import type {ChatLine, RoomView, TrackView} from '../host/session'
 import type {HostToWebview, ViewState, WebviewToHost} from '../protocol/webview'
-import {unreadSince} from './chat-unread'
 import {clock, thumbnail} from './format'
 import {dropPlacement, type DropTarget} from './queue-drop'
 import {Icon} from './icons'
 
-interface Persisted {
-  chatOpen?: boolean
-}
-
-declare function acquireVsCodeApi(): {
-  postMessage(message: WebviewToHost): void
-  getState(): Persisted | undefined
-  setState(state: Persisted): void
-}
+declare function acquireVsCodeApi(): {postMessage(message: WebviewToHost): void}
 
 const vscode = acquireVsCodeApi()
-const strings = (window as Window & {__SYNCROOM_STRINGS__?: Record<string, string>}).__SYNCROOM_STRINGS__ ?? {}
+const injected = window as Window & {__SYNCROOM_STRINGS__?: Record<string, string>; __SYNCROOM_VIEW__?: string}
+const strings = injected.__SYNCROOM_STRINGS__ ?? {}
+/** `chat`: esta instancia es la vista del segundo icono; solo pinta el chat. */
+const viewMode: 'room' | 'chat' = injected.__SYNCROOM_VIEW__ === 'chat' ? 'chat' : 'room'
 const s = (key: string): string => strings[key] ?? key
 const post = (message: WebviewToHost): void => vscode.postMessage(message)
 
@@ -34,6 +28,13 @@ export function App() {
     return () => window.removeEventListener('message', onMessage)
   }, [])
 
+  if (viewMode === 'chat') {
+    return (
+      <main class="chatview">
+        {state.inRoom ? <Chat lines={state.room.chat} /> : <p class="hint">{s('chat.join')}</p>}
+      </main>
+    )
+  }
   return state.inRoom ? <Room room={state.room} playerVisible={state.playerVisible} /> : <Lobby />
 }
 
@@ -153,7 +154,6 @@ function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
 
       <AddLink />
       <Queue tracks={room.tracks} />
-      <Chat lines={room.chat} />
     </main>
   )
 }
@@ -360,27 +360,18 @@ function time(key: number, at: number): string {
   return text
 }
 
+/** La vista de chat: ocupa todo el alto; los no leídos los cuenta el host y los pone en el icono. */
 function Chat({lines}: {lines: ChatLine[]}) {
-  const [open, setOpen] = useState<boolean>(() => vscode.getState()?.chatOpen ?? true)
   const [text, setText] = useState('')
-  const lastId = lines.at(-1)?.id
-  // Última línea vista con el panel abierto: lo que llegue después cuenta como no leído.
-  // Se guarda el id, no la cuenta: con el tope de 200 la cuenta deja de crecer.
-  const [seenId, setSeenId] = useState(lastId)
+  const lastKey = lines.at(-1)?.key
   const list = useRef<HTMLOListElement>(null)
+  // Si el usuario está al fondo, cada línea nueva baja la lista; si subió a leer, se respeta.
   const stuck = useRef(true)
-
-  useEffect(() => {
-    vscode.setState({...vscode.getState(), chatOpen: open})
-    if (open) setSeenId(lastId)
-  }, [open, lastId])
 
   useEffect(() => {
     const el = list.current
     if (el !== null && stuck.current) el.scrollTop = el.scrollHeight
-  }, [lastId, open])
-
-  const unread = open ? 0 : unreadSince(lines, seenId)
+  }, [lastKey])
 
   const send = (): void => {
     const clean = text.trim()
@@ -391,64 +382,57 @@ function Chat({lines}: {lines: ChatLine[]}) {
   }
 
   return (
-    <section class={open ? 'chat open' : 'chat'}>
-      <h3>
-        <button class="fold" onClick={() => setOpen(!open)} aria-expanded={open} title={open ? s('chat.hide') : s('chat.show')}>
-          <Icon name="chevron" />
-          {s('chat.title')}
-          {unread > 0 && <span class="unread">{unread}</span>}
-        </button>
-      </h3>
-      {open && (
-        <>
-          {lines.length === 0 ? (
-            <p class="hint">{s('chat.empty')}</p>
-          ) : (
-            <ol
-              ref={list}
-              onScroll={event => {
-                const el = event.currentTarget
-                stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8
-              }}
-            >
-              {lines.map(line =>
-                line.kind === 'message' ? (
-                  <li key={line.key} class={line.mine ? 'line mine' : 'line'}>
-                    <span class="who">{line.name === '' ? s('room.unnamed') : line.name}</span>
-                    <span class="when">{time(line.key, line.at)}</span>
-                    <span class="text">{line.text}</span>
-                  </li>
-                ) : (
-                  <li key={line.key} class="system">
-                    {line.kind === 'present'
-                      ? s('chat.present').replace('{0}', line.text)
-                      : (line.kind === 'joined' ? s('chat.joined') : s('chat.left')).replace('{0}', line.name)}
-                  </li>
-                )
-              )}
-            </ol>
+    <section class="chat">
+      {lines.length === 0 ? (
+        <p class="hint">{s('chat.empty')}</p>
+      ) : (
+        <ol
+          ref={list}
+          onScroll={event => {
+            const el = event.currentTarget
+            stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8
+          }}
+        >
+          {lines.map(line =>
+            line.kind === 'message' ? (
+              <li key={line.key} class={line.mine ? 'line mine' : 'line'}>
+                <span class="who">{line.name === '' ? s('room.unnamed') : line.name}</span>
+                <span class="when">{time(line.key, line.at)}</span>
+                <span class="text">{line.text}</span>
+              </li>
+            ) : (
+              <li key={line.key} class="system">
+                {line.kind === 'present'
+                  ? s('chat.present').replace('{0}', line.text)
+                  : (line.kind === 'joined' ? s('chat.joined') : s('chat.left')).replace('{0}', line.name)}
+              </li>
+            )
           )}
-          <form
-            class="say"
-            onSubmit={event => {
-              event.preventDefault()
-              send()
-            }}
-          >
-            <input
-              value={text}
-              maxLength={500}
-              placeholder={s('chat.placeholder')}
-              aria-label={s('chat.placeholder')}
-              autocomplete="off"
-              onInput={event => setText(event.currentTarget.value)}
-            />
-            <button type="submit" class="icon" disabled={text.trim() === ''} title={s('chat.send')} aria-label={s('chat.send')}>
-              <Icon name="send" />
-            </button>
-          </form>
-        </>
+        </ol>
       )}
+      <form
+        class="say"
+        onSubmit={event => {
+          event.preventDefault()
+          send()
+        }}
+      >
+        <input
+          value={text}
+          maxLength={500}
+          placeholder={s('chat.placeholder')}
+          aria-label={s('chat.placeholder')}
+          autocomplete="off"
+          ref={el => {
+            // Al abrir la vista, el cursor ya está en la caja.
+            if (el !== null && document.activeElement === document.body) el.focus()
+          }}
+          onInput={event => setText(event.currentTarget.value)}
+        />
+        <button type="submit" class="icon" disabled={text.trim() === ''} title={s('chat.send')} aria-label={s('chat.send')}>
+          <Icon name="send" />
+        </button>
+      </form>
     </section>
   )
 }

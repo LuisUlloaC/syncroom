@@ -3,7 +3,6 @@
   "Add": "Añadir",
   "Added the first {0} videos. Longer playlists are not supported yet.": "Se añadieron los primeros {0} vídeos. Las playlists más largas aún no se admiten.",
   "Change your name": "Cambiar tu nombre",
-  "Chat": "Chat",
   "Click to play or pause": "Clic para reproducir o pausar",
   "Connected directly": "Conexión directa",
   "Connected through relays": "Conexión por relays",
@@ -14,11 +13,11 @@
   "Drag to reorder": "Arrastra para reordenar",
   "Enter a name of up to 40 characters.": "Escribe un nombre de hasta 40 caracteres.",
   "Have a code?": "¿Tienes un código?",
-  "Hide chat": "Ocultar chat",
   "Hide player window": "Ocultar ventana del reproductor",
   "In the room: {0}": "En la sala: {0}",
   "Join": "Unirse",
   "Join or create a room first.": "Primero crea una sala o únete a una.",
+  "Join or create a room in the SyncRoom view to chat.": "Entra en una sala desde la vista SyncRoom para chatear.",
   "Leave room": "Salir de la sala",
   "Listen together": "Escuchad juntos",
   "Message the room": "Escribe a la sala",
@@ -38,7 +37,6 @@
   "Room code {0} copied.": "Código de sala {0} copiado.",
   "Room {0}": "Sala {0}",
   "Send": "Enviar",
-  "Show chat": "Mostrar chat",
   "Show player window": "Mostrar ventana del reproductor",
   "Shown to the other people in the room.": "Lo verán las demás personas de la sala.",
   "Someone": "Alguien",
@@ -62,5 +60,6 @@
   "not available for you": "no disponible para ti",
   "you": "tú",
   "{0} joined": "{0} entró",
-  "{0} left": "{0} salió"
+  "{0} left": "{0} salió",
+  "{0} unread chat messages": "{0} mensajes de chat sin leer"
 }

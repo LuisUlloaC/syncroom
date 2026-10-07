@@ -79,9 +79,7 @@
       'queue.unplayable': 'not available for you',
       'queue.playNext': 'Play next',
       'queue.drag': 'Drag to reorder',
-      'chat.title': 'Chat',
-      'chat.show': 'Show chat',
-      'chat.hide': 'Hide chat',
+      'chat.join': 'Join or create a room in the SyncRoom view to chat.',
       'chat.empty': 'No messages yet.',
       'chat.placeholder': 'Message the room',
       'chat.send': 'Send',
@@ -116,13 +114,13 @@
       volume: 60
     }
 
-    const wanted = new URLSearchParams(location.search).get('state')
+    const params = new URLSearchParams(location.search)
+    const wanted = params.get('state')
+    // ?view=chat enseña la vista del segundo icono.
+    window.__SYNCROOM_VIEW__ = params.get('view') === 'chat' ? 'chat' : 'room'
     const state = wanted === 'lobby' ? {inRoom: false} : {inRoom: true, room, playerVisible: false}
     // Igual que el host real: responde con el estado cuando la vista dice «ready».
-    let saved
     window.acquireVsCodeApi = () => ({
-      getState: () => saved,
-      setState: value => (saved = value),
       postMessage: message => {
         console.log('to host', message)
         if (message.t === 'ready') window.postMessage({t: 'state', state}, '*')
