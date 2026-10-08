@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2
+
+- Fixed: most videos showed "This video is unavailable" (embed error 150). YouTube refuses to embed them in a player page served from an IP address; the player page now loads from localhost.
+
 ## 0.5.1
 
 - Fixed: the chat box grabbed the keyboard focus every second, interrupting typing elsewhere in VS Code (for example the commit message).

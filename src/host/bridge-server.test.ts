@@ -38,7 +38,7 @@ function http(path: string, options: {host?: string; method?: string} = {}): Pro
         port: bridge.port,
         path,
         method: options.method ?? 'GET',
-        headers: {host: options.host ?? `127.0.0.1:${bridge.port}`}
+        headers: {host: options.host ?? `localhost:${bridge.port}`}
       },
       res => {
         let body = ''
@@ -52,9 +52,9 @@ function http(path: string, options: {host?: string; method?: string} = {}): Pro
   })
 }
 
-function connect(path: string, origin = `http://127.0.0.1:${bridge.port}`): Promise<WebSocket> {
+function connect(path: string, origin = `http://localhost:${bridge.port}`): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${bridge.port}${path}`, {origin})
+    const ws = new WebSocket(`ws://127.0.0.1:${bridge.port}${path}`, {origin, headers: {host: `localhost:${bridge.port}`}})
     ws.once('open', () => resolve(ws))
     ws.once('error', reject)
   })
@@ -66,8 +66,9 @@ const nextMessage = (ws: WebSocket): Promise<string> =>
 const closed = (ws: WebSocket): Promise<void> => new Promise(resolve => ws.once('close', () => resolve()))
 
 describe('BridgeServer http', () => {
-  it('exposes a loopback url with a long random token', () => {
-    expect(bridge.pageUrl).toBe(`http://127.0.0.1:${bridge.port}/?t=${token}`)
+  it('exposes a localhost url with a long random token', () => {
+    // Con una IP como origen YouTube rechaza casi todo vídeo incrustado (error 150).
+    expect(bridge.pageUrl).toBe(`http://localhost:${bridge.port}/?t=${token}`)
     expect(token).toMatch(/^[0-9a-f]{48}$/)
   })
 
@@ -98,7 +99,7 @@ describe('BridgeServer http', () => {
 
   it('refuses a foreign Host header even with the token', async () => {
     expect((await http(`/?t=${token}`, {host: 'evil.example'})).status).toBe(403)
-    expect((await http(`/?t=${token}`, {host: `localhost:${bridge.port}`})).status).toBe(403)
+    expect((await http(`/?t=${token}`, {host: `127.0.0.1:${bridge.port}`})).status).toBe(403)
   })
 
   it('refuses other methods and unknown paths', async () => {
@@ -151,6 +152,7 @@ describe('BridgeServer websocket', () => {
     await expect(connect('/ws')).rejects.toThrow()
     await expect(connect('/ws?t=nope')).rejects.toThrow()
     await expect(connect(`/ws?t=${token}`, 'https://evil.example')).rejects.toThrow()
+    await expect(connect(`/ws?t=${token}`, `http://127.0.0.1:${bridge.port}`)).rejects.toThrow()
     await expect(connect(`/other?t=${token}`)).rejects.toThrow()
   })
 

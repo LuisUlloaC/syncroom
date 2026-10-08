@@ -25,4 +25,18 @@ describe('engine', () => {
       await peer.stop()
     }
   })
+
+  // Los vídeos de demostración se incrustan desde cualquier origen; los de música, no desde una IP (error 150).
+  it('plays an ordinary music video, not only the API demos', async () => {
+    const music = {videoId: 'dQw4w9WgXcQ', title: 'Never Gonna Give You Up', author: 'Rick Astley'}
+    const peer = await startPeer({code: generateRoomCode(), name: 'Solo', direct: false, videos: [music]})
+    const status = () => peer.session.playerStatus()
+    try {
+      await waitFor('engine ready', () => peer.session.view().engineReady)
+      await peer.session.addLink('ignored: the helper resolves a fixed video')
+      await waitFor('music video playing', () => status()?.state === 'playing' && (status()?.timeS ?? 0) > 1)
+    } finally {
+      await peer.stop()
+    }
+  })
 })

@@ -10,7 +10,7 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self' https://www.youtube.com",
   'frame-src https://www.youtube.com https://www.youtube-nocookie.com',
-  "connect-src 'self' ws://127.0.0.1:* wss:",
+  "connect-src 'self' ws://localhost:* wss:",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' https: data:"
 ].join('; ')
@@ -38,7 +38,7 @@ export class BridgeServer implements EngineLink {
     const wss = new WebSocketServer({noServer: true, maxPayload: 1024 * 1024})
     await new Promise<void>((resolve, reject) => {
       http.once('error', reject)
-      // Solo loopback: nunca 0.0.0.0 ni «localhost».
+      // Solo loopback: nunca 0.0.0.0. Se escucha en la IP; «localhost» es solo el nombre de la página.
       http.listen(0, '127.0.0.1', () => resolve())
     })
     const address = http.address()
@@ -52,8 +52,9 @@ export class BridgeServer implements EngineLink {
     return server
   }
 
+  /** Con una IP como origen YouTube rechaza casi todo vídeo incrustado (error 150); con «localhost» no. */
   get pageUrl(): string {
-    return `http://127.0.0.1:${this.port}/?t=${this.token}`
+    return `${this.origin}/?t=${this.token}`
   }
 
   send(msg: HostToEngine): void {
@@ -83,7 +84,11 @@ export class BridgeServer implements EngineLink {
   }
 
   private get origin(): string {
-    return `http://127.0.0.1:${this.port}`
+    return `http://${this.host}`
+  }
+
+  private get host(): string {
+    return `localhost:${this.port}`
   }
 
   private parse(req: IncomingMessage): URL | undefined {
@@ -95,7 +100,7 @@ export class BridgeServer implements EngineLink {
   }
 
   private authorized(req: IncomingMessage, url: URL): boolean {
-    if (req.headers.host !== `127.0.0.1:${this.port}`) return false
+    if (req.headers.host !== this.host) return false
     const given = Buffer.from(url.searchParams.get('t') ?? '')
     const expected = Buffer.from(this.token)
     return given.length === expected.length && timingSafeEqual(given, expected)
