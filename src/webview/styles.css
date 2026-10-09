@@ -71,6 +71,42 @@ input[type='range'] { width: 100%; min-width: 0; margin: 0; accent-color: var(--
 .lobby .join label { display: grid; gap: 0.3rem; }
 .lobby .join label span { font-size: 0.9em; color: var(--vscode-descriptionForeground); }
 .lobby .join input { font-family: var(--vscode-editor-font-family); letter-spacing: 0.12em; text-transform: uppercase; }
+.open { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; padding-top: 0.9rem; border-top: 1px solid var(--vscode-widget-border, var(--vscode-panel-border)); }
+.open .hint { color: var(--vscode-descriptionForeground); }
+.open ul { display: grid; grid-template-columns: minmax(0, 1fr); margin: 0 -0.9rem; padding: 0; list-style: none; }
+.open li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.open li:hover { background: var(--vscode-list-hoverBackground); }
+.open .pick {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.1rem; justify-items: start;
+  padding: 0.35rem 0.4rem 0.35rem 0.9rem; border: 0; background: none; color: inherit; text-align: left;
+}
+.open .pick:hover:not(:disabled) { background: none; }
+.open .who { display: inline-flex; align-items: center; gap: 0.35em; font-weight: 600; }
+.open .who .ico { width: 0.85em; height: 0.85em; color: var(--vscode-descriptionForeground); }
+.open .what { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.open .meta { display: inline-flex; align-items: center; gap: 0.5em; font-size: 0.9em; color: var(--vscode-descriptionForeground); }
+.open .more { padding-right: 0.6rem; }
+.open .more summary { display: grid; place-items: center; padding: 0.25rem; border-radius: 0.2em; list-style: none; cursor: pointer; color: var(--vscode-descriptionForeground); }
+.open .more summary::-webkit-details-marker { display: none; }
+.open .more summary:hover { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-foreground); }
+.open .menu {
+  position: absolute; right: 0.6rem; top: 100%; z-index: 2; display: grid; min-width: 12rem;
+  padding: 0.25rem; border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border)); border-radius: 0.2em;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background)); color: var(--vscode-menu-foreground, inherit);
+  box-shadow: 0 0.15rem 0.5rem var(--vscode-widget-shadow, transparent);
+}
+.open .menu button { justify-content: start; border: 0; background: none; color: inherit; text-align: left; padding: 0.3rem 0.5rem; }
+.open .menu button:hover { background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground)); color: var(--vscode-menu-selectionForeground, inherit); }
+.open .groups { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; font-size: 0.95em; }
+.open .groups .label { color: var(--vscode-descriptionForeground); margin-right: 0.15rem; }
+.chip {
+  display: inline-flex; align-items: center; gap: 0.25em; padding: 0 0.45em; border-radius: 1em;
+  background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); font-size: 0.9em; line-height: 1.6;
+}
+.chip .x { padding: 0 0.15em; border: 0; background: none; color: inherit; line-height: 1; opacity: 0.8; }
+.chip .x:hover:not(:disabled) { background: none; opacity: 1; }
+button.link { justify-self: start; padding: 0; border: 0; background: none; color: var(--vscode-textLink-foreground); }
+button.link:hover:not(:disabled) { background: none; color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
 
 /* ── Sala ─────────────────────────────────────────────────── */
 
@@ -89,6 +125,18 @@ input[type='range'] { width: 100%; min-width: 0; margin: 0; accent-color: var(--
   font-size: 1.55em; font-weight: 600; letter-spacing: 0.14em; line-height: 1.1;
 }
 .pass .code:hover .value { color: var(--vscode-textLink-activeForeground); }
+
+.visibility { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
+.visibility label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0.5rem; }
+.visibility label span { font-size: 0.9em; color: var(--vscode-descriptionForeground); }
+.visibility select {
+  min-width: 0; padding: 0.2em 0.3em; border: 1px solid var(--vscode-dropdown-border, transparent); border-radius: 0.15em;
+  background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); font: inherit;
+}
+.visibility .reach { font-size: 0.85em; color: var(--vscode-descriptionForeground); }
+.visibility .reach.none { color: var(--vscode-errorForeground); }
+.listed { margin: 0; }
+.listed .badge { display: inline-block; padding: 0 0.5em; border-radius: 1em; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); font-size: 0.85em; line-height: 1.6; }
 
 .people { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.15rem; font-size: 0.92em; overflow-wrap: anywhere; }
 .people button.me {

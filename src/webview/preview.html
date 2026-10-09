@@ -50,6 +50,19 @@
       'lobby.create': 'Create room',
       'lobby.joinLabel': 'Have a code?',
       'lobby.join': 'Join',
+      'lobby.open': 'Open rooms',
+      'lobby.searching': 'Looking for open rooms…',
+      'lobby.none': 'No open rooms right now.',
+      'lobby.offline': 'Could not reach the relays.',
+      'lobby.enter': 'Join this room',
+      'lobby.listeners': '{0} listening',
+      'lobby.more': 'More',
+      'lobby.hideRoom': 'Hide this room',
+      'lobby.hideOwner': 'Hide rooms from this creator',
+      'lobby.showHidden': 'Show hidden ({0})',
+      'lobby.groups': 'Groups',
+      'lobby.addGroup': '+ Group',
+      'lobby.removeGroup': 'Remove group {0}',
       'room.code': 'Room code',
       'room.copy': 'Copy room code',
       'room.leave': 'Leave room',
@@ -61,6 +74,16 @@
       'room.alone': 'Waiting for others to join',
       'room.starting': 'Starting the audio engine…',
       'room.fault': 'YouTube could not be loaded in the audio engine. Check your connection.',
+      'room.visibility': 'Who can find this room',
+      'room.private': 'Private (code only)',
+      'room.public': 'Public',
+      'room.group': 'Group: {0}',
+      'room.newGroup': 'New group…',
+      'room.publicHint': 'Anyone using SyncRoom can find this room and its code.',
+      'room.visibleOn': 'Listed on {0} relays',
+      'room.notListed': 'Not reaching any relay',
+      'room.badgePublic': 'Public',
+      'room.badgeGroup': 'Group',
       'player.nothing': 'Nothing playing',
       'player.hint': 'Paste a YouTube link below to start.',
       'player.play': 'Play',
@@ -111,8 +134,8 @@
       playback: {trackId: 'p:1', playing: true, positionS: 84, durationS: 1344},
       // ?policy=guest: lo que ve alguien que no es el dueño con la lista bloqueada.
       policy: new URLSearchParams(location.search).get('policy') === 'guest'
-        ? {ownerName: 'Dayana', mine: false, lockQueue: true, lockPlayback: true, canEditQueue: false, canControlPlayback: false}
-        : {ownerName: 'Luis', mine: true, lockQueue: true, lockPlayback: false, canEditQueue: true, canControlPlayback: true},
+        ? {ownerName: 'Dayana', mine: false, listed: 'global', lockQueue: true, lockPlayback: true, canEditQueue: false, canControlPlayback: false}
+        : {ownerName: 'Luis', mine: true, listed: 'group', lockQueue: true, lockPlayback: false, canEditQueue: true, canControlPlayback: true},
       chat: [
         {key: 1, id: 'present', kind: 'present', from: '', name: '', text: 'Dayana', at: Date.now() - 600000, mine: false},
         {key: 2, id: 'c1', kind: 'message', from: 'a', name: 'Dayana', text: 'pon algo de Creepy Nuts', at: Date.now() - 300000, mine: false},
@@ -130,7 +153,19 @@
     const wanted = params.get('state')
     // ?view=chat enseña la vista del segundo icono.
     window.__SYNCROOM_VIEW__ = params.get('view') === 'chat' ? 'chat' : 'room'
-    const state = wanted === 'lobby' ? {inRoom: false} : {inRoom: true, room, playerVisible: false}
+    const directory = {
+      status: 'ok',
+      rooms: params.get('rooms') === 'none' ? [] : [
+        {code: 'KQ7MX2PA', owner: 'Dayana', playing: 'Creepy Nuts — Bling-Bang-Bang-Born', listeners: 4, locked: true, group: null},
+        {code: 'ZT4HWR9C', owner: 'Equipo front', playing: 'Lo-fi para concentrarse, con un título bastante largo que se corta', listeners: 2, locked: false, group: 'motorflash front'},
+        {code: 'PM3XQ7VB', owner: 'Leo', playing: null, listeners: 1, locked: false, group: null}
+      ],
+      hiddenCount: 1,
+      groups: ['motorflash front']
+    }
+    const state = wanted === 'lobby'
+      ? {inRoom: false, directory}
+      : {inRoom: true, room, playerVisible: false, listing: {relaysOk: 3, group: 'motorflash front'}, groups: ['motorflash front']}
     // Igual que el host real: responde con el estado cuando la vista dice «ready».
     window.acquireVsCodeApi = () => ({
       postMessage: message => {

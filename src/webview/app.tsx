@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from 'preact/hooks'
 import {formatRoomCode} from '../core/ids'
 import type {ChatLine, PolicyView, RoomView, TrackView} from '../host/session'
-import type {HostToWebview, ViewState, WebviewToHost} from '../protocol/webview'
+import type {HostToWebview, ListingView, LobbyView, ViewState, WebviewToHost} from '../protocol/webview'
 import {clock, thumbnail} from './format'
 import {dropPlacement, type DropTarget} from './queue-drop'
 import {Icon} from './icons'
@@ -38,10 +38,14 @@ export function App() {
       </main>
     )
   }
-  return state.inRoom ? <Room room={state.room} playerVisible={state.playerVisible} /> : <Lobby />
+  return state.inRoom ? (
+    <Room room={state.room} playerVisible={state.playerVisible} listing={state.listing} groups={state.groups} />
+  ) : (
+    <Lobby directory={state.directory} />
+  )
 }
 
-function Lobby() {
+function Lobby({directory}: {directory: LobbyView}) {
   const [code, setCode] = useState('')
   return (
     <main class="lobby">
@@ -71,11 +75,77 @@ function Lobby() {
           {s('lobby.join')}
         </button>
       </form>
+      <OpenRooms directory={directory} />
     </main>
   )
 }
 
-function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
+/** Salas listadas por sus dueños: clic para entrar; ⋯ para ocultarlas. Al pie, tus grupos. */
+function OpenRooms({directory}: {directory: LobbyView}) {
+  const empty =
+    directory.status === 'searching' ? s('lobby.searching') : directory.status === 'offline' ? s('lobby.offline') : s('lobby.none')
+  return (
+    <section class="open">
+      <h3>{s('lobby.open')}</h3>
+      {directory.rooms.length === 0 ? (
+        <p class="hint">{empty}</p>
+      ) : (
+        <ul>
+          {directory.rooms.map(room => (
+            <li key={room.code}>
+              <button class="pick" title={s('lobby.enter')} onClick={() => post({t: 'join', code: room.code})}>
+                <span class="who">
+                  {room.owner}
+                  {room.locked && <Icon name="lock" />}
+                </span>
+                <span class="what">{room.playing ?? s('player.nothing')}</span>
+                <span class="meta">
+                  {s('lobby.listeners').replace('{0}', String(room.listeners))}
+                  {room.group !== null && <span class="chip">{room.group}</span>}
+                </span>
+              </button>
+              <details class="more">
+                <summary title={s('lobby.more')} aria-label={s('lobby.more')}>
+                  <Icon name="more" />
+                </summary>
+                <div class="menu">
+                  <button onClick={() => post({t: 'hide', code: room.code, owner: false})}>{s('lobby.hideRoom')}</button>
+                  <button onClick={() => post({t: 'hide', code: room.code, owner: true})}>{s('lobby.hideOwner')}</button>
+                </div>
+              </details>
+            </li>
+          ))}
+        </ul>
+      )}
+      {directory.hiddenCount > 0 && (
+        <button class="link" onClick={() => post({t: 'unhideAll'})}>
+          {s('lobby.showHidden').replace('{0}', String(directory.hiddenCount))}
+        </button>
+      )}
+      <div class="groups">
+        <span class="label">{s('lobby.groups')}</span>
+        {directory.groups.map(word => (
+          <span key={word} class="chip">
+            {word}
+            <button
+              class="x"
+              title={s('lobby.removeGroup').replace('{0}', word)}
+              aria-label={s('lobby.removeGroup').replace('{0}', word)}
+              onClick={() => post({t: 'removeGroup', word})}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <button class="link" onClick={() => post({t: 'addGroup', thenList: false})}>
+          {s('lobby.addGroup')}
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function Room({room, playerVisible, listing, groups}: {room: RoomView; playerVisible: boolean; listing: ListingView | undefined; groups: string[]}) {
   const current = room.tracks.find(track => track.current)
   const canPlay = room.policy?.canControlPlayback ?? true
   const canEdit = room.policy?.canEditQueue ?? true
@@ -103,6 +173,19 @@ function Room({room, playerVisible}: {room: RoomView; playerVisible: boolean}) {
           {!room.engineReady ? s('room.starting') : room.fault !== undefined ? s('room.fault') : link}
         </span>
       </p>
+
+      {room.policy?.mine === true ? (
+        <Visibility policy={room.policy} listing={listing} groups={groups} />
+      ) : (
+        room.policy !== undefined &&
+        room.policy.listed !== 'none' && (
+          <p class="listed">
+            <span class="badge" title={room.policy.listed === 'global' ? s('room.publicHint') : undefined}>
+              {room.policy.listed === 'global' ? s('room.badgePublic') : s('room.badgeGroup')}
+            </span>
+          </p>
+        )
+      )}
 
       <section class="now">
         {current === undefined ? (
@@ -289,6 +372,47 @@ function Locks({policy}: {policy: PolicyView}) {
         {s('queue.lockPlaybackLabel')}
       </button>
     </span>
+  )
+}
+
+/** Solo el dueño: quién puede encontrar la sala. «Nuevo grupo…» pide la palabra en VS Code. */
+function Visibility({policy, listing, groups}: {policy: PolicyView; listing: ListingView | undefined; groups: string[]}) {
+  const value = policy.listed === 'group' ? `group:${listing?.group ?? ''}` : policy.listed
+  const choose = (next: string): void => {
+    if (next === 'new') post({t: 'addGroup', thenList: true})
+    else if (next.startsWith('group:')) post({t: 'listed', listed: 'group', group: next.slice('group:'.length)})
+    else if (next === 'none' || next === 'global') post({t: 'listed', listed: next})
+  }
+  return (
+    <div class="visibility">
+      <label>
+        <span>{s('room.visibility')}</span>
+        <select
+          value={value}
+          title={policy.listed === 'global' ? s('room.publicHint') : undefined}
+          onChange={event => {
+            const next = event.currentTarget.value
+            // «Nuevo grupo…» no es un estado: el selector vuelve a lo actual hasta que el host responda.
+            if (next === 'new') event.currentTarget.value = value
+            choose(next)
+          }}
+        >
+          <option value="none">{s('room.private')}</option>
+          <option value="global">{s('room.public')}</option>
+          {groups.map(word => (
+            <option key={word} value={`group:${word}`}>
+              {s('room.group').replace('{0}', word)}
+            </option>
+          ))}
+          <option value="new">{s('room.newGroup')}</option>
+        </select>
+      </label>
+      {listing !== undefined && listing.relaysOk !== null && (
+        <span class={listing.relaysOk > 0 ? 'reach' : 'reach none'}>
+          {listing.relaysOk > 0 ? s('room.visibleOn').replace('{0}', String(listing.relaysOk)) : s('room.notListed')}
+        </span>
+      )}
+    </div>
   )
 }
 

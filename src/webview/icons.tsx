@@ -11,7 +11,9 @@ const PATHS = {
   grip: 'M6 3h1.5v1.5H6zm2.5 0H10v1.5H8.5zM6 7.25h1.5v1.5H6zm2.5 0H10v1.5H8.5zM6 11.5h1.5V13H6zm2.5 0H10V13H8.5z',
   send: 'M2 2l12 6-12 6 1.5-4.8L9 8 3.5 6.8z',
   lock: 'M4 7V5a4 4 0 0 1 8 0v2h1v7H3V7zm1.5 0h5V5a2.5 2.5 0 0 0-5 0z',
-  unlock: 'M4 7V5a4 4 0 0 1 7.8-1.2l-1.4.6A2.5 2.5 0 0 0 5.5 5v2H13v7H3V7z'
+  unlock: 'M4 7V5a4 4 0 0 1 7.8-1.2l-1.4.6A2.5 2.5 0 0 0 5.5 5v2H13v7H3V7z',
+  /** Tres puntos: menú de más acciones. */
+  more: 'M3 7h2v2H3zm4 0h2v2H7zm4 0h2v2h-2z'
 } as const
 
 export type IconName = keyof typeof PATHS
