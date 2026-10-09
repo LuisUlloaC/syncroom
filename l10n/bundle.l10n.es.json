@@ -11,6 +11,7 @@
   "Copy room code": "Copiar código de sala",
   "Could not reach YouTube. Check your connection and try again.": "No se pudo conectar con YouTube. Revisa tu conexión e inténtalo de nuevo.",
   "Could not reach the relays.": "No se pudo conectar con los relays.",
+  "Could not save the group. {0}": "No se pudo guardar el grupo. {0}",
   "Create a room and share its code. Everyone in the room hears the same YouTube queue at the same time.": "Crea una sala y comparte su código. Todos los de la sala oyen la misma cola de YouTube a la vez.",
   "Create room": "Crear sala",
   "Drag to reorder": "Arrastra para reordenar",

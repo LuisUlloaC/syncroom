@@ -33,8 +33,14 @@ export class Discovery implements vscode.Disposable {
   private readonly changed = new vscode.EventEmitter<void>()
   readonly onDidChange = this.changed.event
   private readonly ready: Promise<void>
+  /** No se pudo poner en marcha la red: el lobby dice «sin conexión» en vez de buscar para siempre. */
+  private failed = false
+  private disposed = false
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly log: (text: string) => void
+  ) {
     this.hidden = {
       rooms: context.globalState.get<string[]>('hiddenRooms', []),
       owners: context.globalState.get<string[]>('hiddenOwners', [])
@@ -48,7 +54,8 @@ export class Discovery implements vscode.Disposable {
   }
 
   directoryView(): LobbyView {
-    const view = this.directory?.view(this.hidden) ?? {status: 'searching' as const, rooms: [], hiddenCount: 0}
+    const idle = {status: this.failed ? ('offline' as const) : ('searching' as const), rooms: [], hiddenCount: 0}
+    const view = this.directory?.view(this.hidden) ?? idle
     return {...view, groups: this.groupWords()}
   }
 
@@ -88,7 +95,8 @@ export class Discovery implements vscode.Disposable {
           })
     const listed = scope !== undefined && snapshot !== undefined
     const sameScope = this.listingState !== undefined && this.listingState.group === (scope?.group ?? null)
-    this.listingState = listed ? {relaysOk: sameScope ? (this.listingState?.relaysOk ?? null) : null, group: scope.group} : undefined
+    const relaysOk = this.failed ? 0 : sameScope ? (this.listingState?.relaysOk ?? null) : null
+    this.listingState = listed ? {relaysOk, group: scope.group} : undefined
     this.announcer?.update(listed ? scope : undefined, listed ? snapshot : undefined)
   }
 
@@ -108,11 +116,14 @@ export class Discovery implements vscode.Disposable {
     })
     const word = typed === undefined ? undefined : normalizeGroupWord(typed)
     if (word === undefined) return undefined
-    if (!this.groups.some(group => group.word === word)) {
-      this.groups = [...this.groups, await deriveGroupKeys(word)]
-      await this.saveGroups()
+    if (this.groups.some(group => group.word === word)) return word
+    try {
+      await this.saveGroups([...this.groups, await deriveGroupKeys(word)])
+      return word
+    } catch (error) {
+      this.reportSaveError(error)
+      return undefined
     }
-    return word
   }
 
   async removeGroup(word: string): Promise<void> {
@@ -124,8 +135,11 @@ export class Discovery implements vscode.Disposable {
       remove
     )
     if (choice !== remove) return
-    this.groups = this.groups.filter(group => group.word !== word)
-    await this.saveGroups()
+    try {
+      await this.saveGroups(this.groups.filter(group => group.word !== word))
+    } catch (error) {
+      this.reportSaveError(error)
+    }
   }
 
   hide(code: string, owner: boolean): void {
@@ -145,6 +159,7 @@ export class Discovery implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.disposed = true
     void this.leaveRoom().finally(() => {
       this.directory?.dispose()
       this.net?.close()
@@ -152,35 +167,64 @@ export class Discovery implements vscode.Disposable {
     this.changed.dispose()
   }
 
+  /** Nunca rechaza: si algo falla lo dice en el registro y el lobby lo refleja. */
   private async load(): Promise<void> {
-    let secret = await this.context.secrets.get(NOSTR_KEY)
-    if (secret === undefined || !/^[0-9a-f]{64}$/.test(secret)) {
-      secret = hex(generateSecretKey())
-      await this.context.secrets.store(NOSTR_KEY, secret)
+    const secret = await this.loadSecret()
+    if (this.disposed) return
+    let groups: GroupKeys[] = []
+    try {
+      groups = await this.loadGroups()
+    } catch (error) {
+      this.log(`discovery: could not read the saved groups (${errorText(error)})`)
     }
-    const relays = vscode.workspace.getConfiguration('syncroom').get<string[]>('relays', DEFAULT_RELAYS)
-    const net = createNostrNet(relays, Uint8Array.from(Buffer.from(secret, 'hex')))
-    this.net = net
-    this.directory = new Directory({net, clock: systemClock, onChange: () => this.changed.fire()})
-    this.announcer = new Announcer({
-      net,
-      clock: systemClock,
-      onStatus: relaysOk => {
-        if (this.listingState === undefined) return
-        this.listingState = {...this.listingState, relaysOk}
-        this.changed.fire()
-      }
-    })
-    this.groups = await this.loadGroups()
+    // Lo que se crea a partir de aquí no espera nada: si ya se cerró, no se abre la red.
+    if (this.disposed) return
+    try {
+      const relays = vscode.workspace.getConfiguration('syncroom').get<string[]>('relays', DEFAULT_RELAYS)
+      const net = createNostrNet(relays, secret)
+      this.net = net
+      this.directory = new Directory({net, clock: systemClock, onChange: () => this.changed.fire()})
+      this.announcer = new Announcer({
+        net,
+        clock: systemClock,
+        onStatus: relaysOk => {
+          if (this.listingState === undefined) return
+          this.listingState = {...this.listingState, relaysOk}
+          this.changed.fire()
+        }
+      })
+    } catch (error) {
+      this.failed = true
+      this.log(`discovery: could not reach the relays (${errorText(error)})`)
+      this.syncRoom(this.lastRoom)
+      this.changed.fire()
+      return
+    }
+    this.groups = groups
     this.directory.setScopes(this.scopes())
     // Lo que pasó mientras cargaba: la sala ya abierta y la vista ya visible.
     this.syncRoom(this.lastRoom)
   }
 
+  /** La clave Nostr de esta instalación. Sin almacén de secretos, una de esta sesión (solo afecta a «Ocultar creador»). */
+  private async loadSecret(): Promise<Uint8Array> {
+    try {
+      const saved = await this.context.secrets.get(NOSTR_KEY)
+      if (saved !== undefined && /^[0-9a-f]{64}$/.test(saved)) return Uint8Array.from(Buffer.from(saved, 'hex'))
+      const fresh = generateSecretKey()
+      await this.context.secrets.store(NOSTR_KEY, hex(fresh))
+      return fresh
+    } catch (error) {
+      this.log(`discovery: secret storage unavailable, using a key for this session only (${errorText(error)})`)
+      return generateSecretKey()
+    }
+  }
+
   private async loadGroups(): Promise<GroupKeys[]> {
+    const saved = await this.context.secrets.get(GROUPS) // si el almacén falla, lo registra load()
     let words: unknown
     try {
-      words = JSON.parse((await this.context.secrets.get(GROUPS)) ?? '[]')
+      words = JSON.parse(saved ?? '[]')
     } catch {
       words = []
     }
@@ -190,10 +234,17 @@ export class Discovery implements vscode.Disposable {
     return Promise.all([...new Set(valid)].map(word => deriveGroupKeys(word)))
   }
 
-  private async saveGroups(): Promise<void> {
-    await this.context.secrets.store(GROUPS, JSON.stringify(this.groupWords()))
+  /** Primero se guarda; solo si sale bien cambian los grupos en memoria. */
+  private async saveGroups(groups: GroupKeys[]): Promise<void> {
+    await this.context.secrets.store(GROUPS, JSON.stringify(groups.map(group => group.word)))
+    this.groups = groups
     this.directory?.setScopes(this.scopes())
     this.changed.fire()
+  }
+
+  private reportSaveError(error: unknown): void {
+    this.log(`discovery: could not save the groups (${errorText(error)})`)
+    void vscode.window.showErrorMessage(t('Could not save the group. {0}', errorText(error)))
   }
 
   private saveHidden(): void {
@@ -218,4 +269,8 @@ export class Discovery implements vscode.Disposable {
   private applyActive(): void {
     this.directory?.setActive(this.lobbyVisible && this.lastRoom === undefined)
   }
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

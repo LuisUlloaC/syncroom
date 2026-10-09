@@ -46,7 +46,7 @@ export class RoomController implements vscode.Disposable {
   private readonly discovery: Discovery
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    this.discovery = new Discovery(context)
+    this.discovery = new Discovery(context, text => this.log(text))
     this.discovery.onDidChange(() => {
       this.syncDiscovery()
       this.changed.fire()
