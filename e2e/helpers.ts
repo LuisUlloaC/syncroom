@@ -21,6 +21,8 @@ export const SECOND_VIDEO: VideoMeta = {videoId: 'jNQXAC9IVRw', title: 'Me at th
 export interface TestPeer {
   session: RoomSession
   profileDir: string
+  /** El canal con la página del motor, para mandar y escuchar mensajes crudos. */
+  bridge: BridgeServer
   /** Órdenes enviadas al reproductor (load/play/pause/seek/stop) desde el arranque. */
   playerCommands: () => number
   stop(): Promise<void>
@@ -72,6 +74,7 @@ export async function startPeer(options: PeerOptions): Promise<TestPeer> {
   return {
     session,
     profileDir,
+    bridge,
     playerCommands: () => playerCommands,
     async stop() {
       session.dispose()
