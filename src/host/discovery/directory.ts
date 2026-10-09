@@ -7,6 +7,8 @@ export const REFRESH_MS = 15_000
 export const SEARCH_TIMEOUT_MS = 5000
 /** Basta para los anuncios vivos; evita basura de relays que no respetan la caducidad. */
 export const SINCE_S = 900
+/** Los eventos avisan como mucho una vez cada 250 ms (más uno al final): una avalancha no ahoga al host. */
+export const NOTIFY_MS = 250
 
 export type DirectoryStatus = 'searching' | 'ok' | 'offline'
 
@@ -25,6 +27,8 @@ export class Directory {
   private closeSub: (() => void) | undefined
   private searchTimer: unknown
   private refreshTimer: unknown
+  private notifyTimer: unknown
+  private lastNotifyAt = Number.NEGATIVE_INFINITY
   /** Sube con cada suscripción: lo que llegue de una anterior se descarta. */
   private generation = 0
 
@@ -69,10 +73,11 @@ export class Directory {
         onevent: event => {
           void readAnnouncement(event, scopes).then(incoming => {
             if (incoming === undefined || generation !== this.generation) return
-            const changed = this.list.apply(incoming)
+            const changed = this.list.apply(incoming, this.nowS())
             const wasSearching = this.status !== 'ok'
             this.status = 'ok'
-            if (changed || wasSearching) this.opts.onChange()
+            if (wasSearching) this.opts.onChange()
+            else if (changed) this.notifySoon()
           })
         },
         oneose: () => this.settle(generation)
@@ -95,9 +100,26 @@ export class Directory {
     this.refreshTimer = this.opts.clock.timers.setTimeout(() => {
       if (generation !== this.generation) return
       if (this.status !== 'searching') this.status = this.opts.net.connected() === 0 ? 'offline' : 'ok'
+      this.list.prune(this.nowS())
       this.opts.onChange()
       this.scheduleRefresh(generation)
     }, REFRESH_MS)
+  }
+
+  /** Aviso por eventos: el primero sale ya; los que lleguen en los 250 ms siguientes, juntos al final. */
+  private notifySoon(): void {
+    if (this.notifyTimer !== undefined) return
+    const wait = this.lastNotifyAt + NOTIFY_MS - this.opts.clock.now()
+    if (wait <= 0) {
+      this.lastNotifyAt = this.opts.clock.now()
+      this.opts.onChange()
+      return
+    }
+    this.notifyTimer = this.opts.clock.timers.setTimeout(() => {
+      this.notifyTimer = undefined
+      this.lastNotifyAt = this.opts.clock.now()
+      this.opts.onChange()
+    }, wait)
   }
 
   private unsubscribe(): void {
@@ -106,6 +128,8 @@ export class Directory {
     this.closeSub = undefined
     this.opts.clock.timers.clearTimeout(this.searchTimer)
     this.opts.clock.timers.clearTimeout(this.refreshTimer)
+    this.opts.clock.timers.clearTimeout(this.notifyTimer)
+    this.notifyTimer = undefined
   }
 
   private nowS(): number {
