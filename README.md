@@ -48,7 +48,11 @@ There is no account and no SyncRoom server. Rooms exist only while someone is in
 ## Privacy
 
 - Anyone who has the room code can join and control playback. Share it only with people you trust.
-- A public room shows its code to every SyncRoom user. Group rooms are announced encrypted; without the group word they cannot be read.
+- A public room shows its code to every SyncRoom user. Group rooms are announced encrypted; without the group word
+  neither the room nor its code can be read.
+- Rooms you join from Open rooms connect through relays only, so the people in them never see your IP address.
+  If you list your own room as Public or for a Group, people who join it with direct connections on can see your
+  IP address; turn `syncroom.directConnections` off to avoid it.
 - With direct connections on, the other people in the room can see your IP address (this is how
   peer-to-peer works). Turn `syncroom.directConnections` off to send everything through relays.
 - Messages that travel through public relays are encrypted with a key derived from the room code.

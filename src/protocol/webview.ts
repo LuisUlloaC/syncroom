@@ -22,7 +22,8 @@ export type HostToWebview = {t: 'state'; state: ViewState}
 export type WebviewToHost =
   | {t: 'ready'}
   | {t: 'create'}
-  | {t: 'join'; code: string}
+  /** `fromList`: elegida en «Salas abiertas» (se entra solo por relays: el dueño es un desconocido). */
+  | {t: 'join'; code: string; fromList?: boolean}
   | {t: 'leave'}
   | {t: 'add'; url: string}
   | {t: 'toggle'}

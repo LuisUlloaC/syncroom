@@ -5,7 +5,8 @@
 - Open rooms: the owner can list a room as **Public** (anyone using SyncRoom sees it) or for a **Group** (only people who added the same group word see it). The lobby shows the open rooms; click one to join.
 - Making a room public turns both locks on; the owner can turn them off.
 - Hide a room or every room from a creator from the ⋯ menu; "Show hidden" brings them back.
-- Group words are stored in VS Code's secret storage and never leave your computer; group announcements are encrypted with a key derived from the word.
+- Group words are stored in VS Code's secret storage and never leave your computer; group announcements are encrypted with a key derived from the word, and without the word the room code cannot be recovered from them.
+- Rooms joined from Open rooms connect through relays only, so strangers never see your IP address. The owner of a listed room still reveals their IP address to people who join with direct connections on; turn off `syncroom.directConnections` to avoid it.
 
 ## 0.5.2
 

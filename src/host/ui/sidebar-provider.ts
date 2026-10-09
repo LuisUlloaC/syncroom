@@ -85,7 +85,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         await this.actions.create()
         break
       case 'join':
-        await this.actions.join(msg.code)
+        await this.actions.join(msg.code, {fromList: msg.fromList === true})
         break
       case 'leave':
         await this.actions.leave()

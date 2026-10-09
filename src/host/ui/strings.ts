@@ -39,7 +39,7 @@ export function webviewStrings(): Record<string, string> {
     'room.public': t('Public'),
     'room.group': t('Group: {0}', '{0}'),
     'room.newGroup': t('New group…'),
-    'room.publicHint': t('Anyone using SyncRoom can find this room and its code.'),
+    'room.publicHint': t('Anyone using SyncRoom can find this room and its code. People who join with direct connections on can see your IP address.'),
     'room.visibleOn': t('Listed on {0} relays', '{0}'),
     'room.notListed': t('Not reaching any relay'),
     'room.badgePublic': t('Public'),

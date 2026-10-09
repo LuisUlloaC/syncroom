@@ -69,13 +69,17 @@ export class RoomController implements vscode.Disposable {
     }
   }
 
-  /** Entra en la sala `code`, o crea una nueva (y se hace dueño) si no se da código. */
-  async enter(code?: string): Promise<void> {
+  /**
+   * Entra en la sala `code`, o crea una nueva (y se hace dueño) si no se da código.
+   * `relayOnly`: sin conexión directa en esta sesión, diga lo que diga el ajuste. Para las salas
+   * elegidas de la lista: su gente es desconocida y por conexión directa vería tu IP.
+   */
+  async enter(code?: string, opts: {relayOnly?: boolean} = {}): Promise<void> {
     if (this.busy) return
     this.busy = true
     try {
       await this.leave()
-      await this.open(code ?? generateRoomCode(), code === undefined)
+      await this.open(code ?? generateRoomCode(), code === undefined, opts.relayOnly === true)
     } finally {
       this.busy = false
     }
@@ -210,7 +214,7 @@ export class RoomController implements vscode.Disposable {
     this.output.appendLine(`${new Date().toISOString().slice(11, 19)} ${text}`)
   }
 
-  private async open(code: string, claim: boolean): Promise<void> {
+  private async open(code: string, claim: boolean, relayOnly: boolean): Promise<void> {
     const config = vscode.workspace.getConfiguration('syncroom')
     const configured = config.get<string>('browserPath', '').trim()
     const browser = await locateBrowser({configured})
@@ -221,6 +225,8 @@ export class RoomController implements vscode.Disposable {
     }
     const name = await this.ensureName(config)
     if (name === undefined) return
+    const direct = !relayOnly && config.get<boolean>('directConnections', true)
+    if (relayOnly) this.log(`room ${code}: joined from Open rooms, relays only`)
 
     // Un perfil por ventana de VS Code: Chromium solo admite un proceso por perfil.
     const profileDir = join(this.context.globalStorageUri.fsPath, `engine-profile-${process.pid}`)
@@ -233,7 +239,7 @@ export class RoomController implements vscode.Disposable {
       ownerKey: this.ownerKey(),
       claim,
       initialLocks: this.context.globalState.get<Locks>('locks', {}),
-      direct: config.get<boolean>('directConnections', true),
+      direct,
       relays: config.get<string[]>('relays', DEFAULT_RELAYS),
       volume: this.context.globalState.get<number>('volume', DEFAULT_VOLUME),
       link: bridge,

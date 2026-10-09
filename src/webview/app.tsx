@@ -93,7 +93,7 @@ function OpenRooms({directory}: {directory: LobbyView}) {
         <ul>
           {directory.rooms.map(room => (
             <li key={room.code}>
-              <button class="pick" title={s('lobby.enter')} onClick={() => post({t: 'join', code: room.code})}>
+              <button class="pick" title={s('lobby.enter')} onClick={() => post({t: 'join', code: room.code, fromList: true})}>
                 <span class="who">
                   {room.owner}
                   {room.locked && <Icon name="lock" />}

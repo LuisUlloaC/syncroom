@@ -28,7 +28,8 @@ export class Actions {
     await this.controller.enter()
   }
 
-  async join(code?: string): Promise<void> {
+  /** `fromList`: la sala se eligió en «Salas abiertas»; se entra solo por relays. */
+  async join(code?: string, opts: {fromList?: boolean} = {}): Promise<void> {
     const invalid = t('A room code has 8 letters and digits, like ABCD-2345.')
     const typed =
       code ??
@@ -43,7 +44,7 @@ export class Actions {
       void vscode.window.showWarningMessage(invalid)
       return
     }
-    await this.controller.enter(normalized)
+    await this.controller.enter(normalized, {relayOnly: opts.fromList === true})
   }
 
   async leave(): Promise<void> {
