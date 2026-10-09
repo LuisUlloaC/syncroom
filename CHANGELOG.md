@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+
+- The SyncRoom view now shows the video of the current track (captured from the hidden player on your computer; nothing is sent to the room). Turn it off with the button on the picture or the `syncroom.videoPreview` setting. Ads that play in the hidden player are visible in the preview.
+
 ## 0.6.0
 
 - Open rooms: the owner can list a room as **Public** (anyone using SyncRoom sees it) or for a **Group** (only people who added the same group word see it). The lobby shows the open rooms; click one to join.

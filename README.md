@@ -11,6 +11,7 @@ Listen to YouTube together without leaving VS Code. One person creates a room, s
 4. The chat has its own icon in the activity bar; unread messages show as a badge on it.
 5. Whoever created the room can lock the queue and the playback with the two toggles in the queue header, so only they can change the list or play, pause and skip.
 6. The owner can choose **Who can find this room**: private (code only), public, or a group. Public and group rooms appear under **Open rooms** in the lobby. A group is a shared word (at least 8 characters): add it with **+ Group** and you will see the rooms listed for it.
+7. The SyncRoom view shows the video of the current track, live. It is captured from the hidden player on your computer and goes only to the view, while the view is open; nothing is sent to the room. Turn it off with the camera button on the picture (or the `syncroom.videoPreview` setting) to see only the thumbnail.
 
 There is no account and no SyncRoom server. Rooms exist only while someone is in them.
 
@@ -44,6 +45,7 @@ There is no account and no SyncRoom server. Rooms exist only while someone is in
 | `syncroom.browserPath` | *(auto)* | Browser used to play audio |
 | `syncroom.directConnections` | `true` | Connect peer to peer. Turn off to hide your IP from the room |
 | `syncroom.relays` | 4 public relays | Nostr relays used as a fallback path |
+| `syncroom.videoPreview` | `true` | Show the video of the current track in the SyncRoom view (captured on your computer, never sent to the room) |
 
 ## Privacy
 
@@ -65,6 +67,7 @@ There is no account and no SyncRoom server. Rooms exist only while someone is in
 - Some videos cannot be played outside youtube.com, or are blocked in your region. They are marked
   as not available for you and the rest of the room keeps listening.
 - In hidden mode an ad cannot be skipped; show the player window to skip it.
+- Ads that play in the hidden player are visible in the video preview too.
 - Each VS Code window runs its own audio engine: joining the same room from two windows on one computer plays the audio twice.
 - Tested on Windows. macOS and Linux should work but are not verified yet.
 - Your computer clock must be roughly right, or relays may reject your messages.
