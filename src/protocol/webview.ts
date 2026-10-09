@@ -1,6 +1,7 @@
 import type {Listed} from '../core/types'
 import type {DirectoryView} from '../host/discovery/directory'
 import type {RoomView} from '../host/session'
+import type {RtcSignal} from './bridge'
 
 /** La lista del lobby y tus grupos (palabras guardadas en este equipo). */
 export type LobbyView = DirectoryView & {groups: string[]}
@@ -13,10 +14,16 @@ export interface ListingView {
 
 export type ViewState =
   | {inRoom: false; directory: LobbyView}
-  | {inRoom: true; room: RoomView; playerVisible: boolean; listing: ListingView | undefined; groups: string[]}
+  /** `videoPreview`: el ajuste del usuario (la vista previa puede estar parada aunque sea true). */
+  | {inRoom: true; room: RoomView; playerVisible: boolean; listing: ListingView | undefined; groups: string[]; videoPreview: boolean}
 
 /** Del extension host a la vista lateral. */
-export type HostToWebview = {t: 'state'; state: ViewState}
+export type HostToWebview =
+  | {t: 'state'; state: ViewState}
+  /** Señalización de la vista previa, reenviada desde el motor. */
+  | {t: 'rtc'; signal: RtcSignal}
+  /** El motor dejó de capturar: volver a la miniatura. */
+  | {t: 'previewEnd'}
 
 /** De la vista lateral al extension host. */
 export type WebviewToHost =
@@ -47,3 +54,7 @@ export type WebviewToHost =
   /** El host pide la palabra; con `thenList` la sala pasa a ese grupo. */
   | {t: 'addGroup'; thenList: boolean}
   | {t: 'removeGroup'; word: string}
+  /** Respuesta y candidatos de la vista previa, para el motor. */
+  | {t: 'rtc'; signal: RtcSignal}
+  /** Encender o apagar la vista previa (ajuste del usuario). */
+  | {t: 'videoPreview'; on: boolean}

@@ -15,5 +15,6 @@
   "config.displayName": "Name shown to the other people in a room. If empty, SyncRoom asks the first time.",
   "config.browserPath": "Full path to a Chromium-based browser (Edge, Chrome, Brave, Chromium) used to play audio. Leave empty to find one automatically.",
   "config.directConnections": "Connect directly to the other people in the room (WebRTC). Faster, but they can see your IP address. Turn off to use relays only.",
+  "config.videoPreview": "Show the video of the current track inside the SyncRoom view (captured from the hidden player on this computer; nothing is sent to the room).",
   "config.relays": "Nostr relays used when a direct connection is not possible. Messages are encrypted with a key derived from the room code."
 }

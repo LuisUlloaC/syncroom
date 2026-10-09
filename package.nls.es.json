@@ -15,5 +15,6 @@
   "config.displayName": "Nombre que ven las demás personas de la sala. Si está vacío, SyncRoom lo pregunta la primera vez.",
   "config.browserPath": "Ruta completa de un navegador basado en Chromium (Edge, Chrome, Brave, Chromium) que se usa para reproducir el audio. Déjalo vacío para buscarlo automáticamente.",
   "config.directConnections": "Conectar directamente con las demás personas de la sala (WebRTC). Es más rápido, pero pueden ver tu dirección IP. Desactívalo para usar solo relays.",
+  "config.videoPreview": "Muestra el vídeo de la pista actual dentro de la vista de SyncRoom (capturado del reproductor oculto de este equipo; no se envía nada a la sala).",
   "config.relays": "Relays de Nostr que se usan cuando no es posible la conexión directa. Los mensajes van cifrados con una clave derivada del código de sala."
 }

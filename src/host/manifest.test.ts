@@ -92,7 +92,7 @@ describe('manifest', () => {
   })
 
   it('keeps every other setting at user level', () => {
-    for (const key of ['syncroom.displayName', 'syncroom.directConnections', 'syncroom.relays']) {
+    for (const key of ['syncroom.displayName', 'syncroom.directConnections', 'syncroom.relays', 'syncroom.videoPreview']) {
       expect(manifest.contributes.configuration.properties[key]?.scope, key).toBe('application')
     }
   })

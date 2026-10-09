@@ -167,6 +167,12 @@
           "scope": "application",
           "description": "%config.directConnections%"
         },
+        "syncroom.videoPreview": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%config.videoPreview%"
+        },
         "syncroom.relays": {
           "type": "array",
           "items": {

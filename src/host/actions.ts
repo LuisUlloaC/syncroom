@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 import {formatRoomCode, normalizeRoomCode} from '../core/ids'
 import type {Listed} from '../core/types'
+import type {RtcSignal} from '../protocol/bridge'
 import {ResolveError} from '../resolve/youtube'
 import type {RoomController} from './controller'
 
@@ -136,6 +137,15 @@ export class Actions {
 
   async togglePlayer(): Promise<void> {
     await this.controller.togglePlayer()
+  }
+
+  /** Vídeo en la vista lateral: preferencia de este usuario, no de la sala. */
+  async setVideoPreview(on: boolean): Promise<void> {
+    await this.controller.setVideoPreview(on)
+  }
+
+  sendRtc(signal: RtcSignal): void {
+    this.controller.sendRtc(signal)
   }
 
   /** Sin argumento pregunta el nombre; con él (desde la vista) lo aplica directamente. */

@@ -5,6 +5,7 @@ import * as vscode from 'vscode'
 import {generatePeerId, generateRoomCode} from '../core/ids'
 import {DEFAULT_RELAYS} from '../protocol/defaults'
 import type {Listed, Locks} from '../core/types'
+import type {RtcSignal} from '../protocol/bridge'
 import type {ViewState} from '../protocol/webview'
 import {resolveLink} from '../resolve/youtube'
 import {BridgeServer} from './bridge-server'
@@ -12,6 +13,7 @@ import {needsDemotion} from './discovery/demotion'
 import {Discovery} from './discovery/service'
 import {locateBrowser} from './engine/browser-locator'
 import {EngineProcess, buildEngineArgs} from './engine/engine-process'
+import {PreviewSwitch} from './preview-switch'
 import {MAX_NAME, RoomSession} from './session'
 
 const t = vscode.l10n.t
@@ -46,10 +48,26 @@ export class RoomController implements vscode.Disposable {
 
   private readonly discovery: Discovery
 
+  /** La vista lateral principal está a la vista y su webview ya escucha. */
+  private sidebarVisible = false
+  private readonly previewSwitch = new PreviewSwitch()
+  private readonly rtc = new vscode.EventEmitter<RtcSignal>()
+  /** Señalización de la vista previa que llega del motor, para la vista lateral. */
+  readonly onDidRtc = this.rtc.event
+  private readonly previewEnd = new vscode.EventEmitter<void>()
+  /** La vista previa se paró (o no pudo arrancar): la vista vuelve a la miniatura. */
+  readonly onDidPreviewEnd = this.previewEnd.event
+  private readonly configWatch: vscode.Disposable
+
   constructor(private readonly context: vscode.ExtensionContext) {
     this.discovery = new Discovery(context, text => this.log(text))
     this.discovery.onDidChange(() => {
       this.syncDiscovery()
+      this.changed.fire()
+    })
+    this.configWatch = vscode.workspace.onDidChangeConfiguration(event => {
+      if (!event.affectsConfiguration('syncroom.videoPreview')) return
+      this.syncPreview()
       this.changed.fire()
     })
   }
@@ -66,7 +84,8 @@ export class RoomController implements vscode.Disposable {
       room: room.session.view(),
       playerVisible: room.visible,
       listing: this.discovery.listing(),
-      groups: this.discovery.groupWords()
+      groups: this.discovery.groupWords(),
+      videoPreview: this.videoPreviewEnabled()
     }
   }
 
@@ -123,8 +142,41 @@ export class RoomController implements vscode.Disposable {
     this.discovery.unhideAll()
   }
 
-  setLobbyVisible(visible: boolean): void {
+  /** La lista del lobby y la vista previa solo funcionan mientras la vista principal se ve. */
+  setSidebarVisible(visible: boolean): void {
+    this.sidebarVisible = visible
     this.discovery.setLobbyVisible(visible)
+    this.syncPreview()
+  }
+
+  /** Preferencia de cada usuario (no de la sala): se guarda en sus ajustes globales. */
+  async setVideoPreview(on: boolean): Promise<void> {
+    await vscode.workspace.getConfiguration('syncroom').update('videoPreview', on, vscode.ConfigurationTarget.Global)
+    this.syncPreview()
+    this.changed.fire()
+  }
+
+  /** Respuesta y candidatos de la vista lateral, para el motor. */
+  sendRtc(signal: RtcSignal): void {
+    this.active?.bridge.send({t: 'rtc', signal})
+  }
+
+  private videoPreviewEnabled(): boolean {
+    return vscode.workspace.getConfiguration('syncroom').get<boolean>('videoPreview', true)
+  }
+
+  /** Captura en marcha solo con sala, motor listo, vista a la vista y el ajuste activado. */
+  private syncPreview(): void {
+    const room = this.active
+    const on = this.previewSwitch.update({
+      inRoom: room !== undefined,
+      visible: this.sidebarVisible,
+      enabled: this.videoPreviewEnabled(),
+      engineReady: room?.session.view().engineReady ?? false
+    })
+    if (on === undefined) return
+    room?.bridge.send({t: 'preview', on: on === 'on'})
+    if (on === 'off') this.previewEnd.fire()
   }
 
   /** La sala propia en la lista: la anuncia o la retira. Listada en un grupo que ya no tengo → privada. */
@@ -157,6 +209,8 @@ export class RoomController implements vscode.Disposable {
     const room = this.active
     if (room === undefined) return
     this.active = undefined
+    this.previewSwitch.reset()
+    this.previewEnd.fire()
     const retiring = this.discovery.leaveRoom()
     room.expectedExit = true
     this.log('leaving the room')
@@ -212,6 +266,9 @@ export class RoomController implements vscode.Disposable {
   dispose(): void {
     void this.leave()
     this.discovery.dispose()
+    this.configWatch.dispose()
+    this.rtc.dispose()
+    this.previewEnd.dispose()
     this.changed.dispose()
     this.output.dispose()
   }
@@ -280,6 +337,15 @@ export class RoomController implements vscode.Disposable {
     })
     session.onEngineFailure(() => void this.onEngineTrouble(room))
     session.start()
+    // Después de session.start(): la sesión ve antes el «ready» y ya cuenta el motor como listo.
+    bridge.onMessage(msg => {
+      if (this.active !== room) return
+      if (msg.t === 'rtc') this.rtc.fire(msg.signal)
+      else if (msg.t === 'preview') {
+        this.log(`preview ${msg.state}${msg.width !== undefined ? ` ${msg.width}x${msg.height ?? '?'}` : ''}`)
+        if (msg.state !== 'on') this.previewEnd.fire()
+      } else if (msg.t === 'ready') this.syncPreview()
+    })
     this.launch(room)
     await vscode.commands.executeCommand('setContext', 'syncroom.inRoom', true)
     this.changed.fire()
@@ -290,6 +356,9 @@ export class RoomController implements vscode.Disposable {
     this.log(`launching engine (${room.visible ? 'window' : 'hidden'}): ${args.map(a => a.replace(/t=[0-9a-f]+/, 't=…')).join(' ')}`)
     room.engine.start(args)
     room.session.expectEngine()
+    // Motor nuevo = página nueva sin captura: se empieza de cero y la vista vuelve a la miniatura.
+    this.previewSwitch.reset()
+    this.previewEnd.fire()
   }
 
   /**
