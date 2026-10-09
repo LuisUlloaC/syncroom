@@ -9,6 +9,17 @@ export interface IceCandidate {
   usernameFragment?: string | null
 }
 
+/** RTCIceCandidate → dato plano que cruza el bridge y el postMessage del webview. */
+export function serializeCandidate(candidate: RTCIceCandidate): IceCandidate {
+  const json = candidate.toJSON()
+  return {
+    candidate: json.candidate ?? '',
+    sdpMid: json.sdpMid ?? null,
+    sdpMLineIndex: json.sdpMLineIndex ?? null,
+    usernameFragment: json.usernameFragment ?? null
+  }
+}
+
 /**
  * Señalización WebRTC de la vista previa (motor ↔ vista lateral, siempre dentro de este equipo).
  * Solo datos planos: los objetos RTC no pasan por el postMessage del webview (DataCloneError).

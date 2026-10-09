@@ -5,6 +5,7 @@ import {createDirectPath} from './net/direct'
 import {createRelayPath} from './net/relay'
 import {Transport} from './net/transport'
 import {Player} from './player'
+import {Preview} from './preview'
 
 async function main(): Promise<void> {
   const token = new URLSearchParams(location.search).get('t') ?? ''
@@ -29,6 +30,8 @@ async function main(): Promise<void> {
     link.send({t: 'log', text: `YouTube player failed: ${String(error)}`})
     link.send({t: 'fault', code: 'youtube-unreachable'})
   }
+
+  const preview = new Preview(msg => link.send(msg))
 
   const leaveRoom = (): void => {
     transport?.close()
@@ -74,6 +77,15 @@ async function main(): Promise<void> {
         break
       case 'volume':
         player?.setVolume(msg.value)
+        break
+      case 'preview':
+        // Sin await: la captura no debe frenar la cola de mensajes de la sala. Un start() o stop()
+        // posterior deja obsoleto al que siga esperando.
+        if (msg.on) preview.start().catch(error => link.send({t: 'log', text: `preview failed: ${String(error)}`}))
+        else preview.stop()
+        break
+      case 'rtc':
+        await preview.signal(msg.signal)
         break
     }
   }
