@@ -17,6 +17,7 @@ describe('isRoomMessage', () => {
       ...a.join(),
       ...a.claimRoom(),
       ...a.setLocks({lockQueue: true}),
+      ...a.setListed('global'),
       ...a.addTracks([meta]),
       ...a.seek(5),
       ...a.addTracks([{...meta, videoId: 'bbbbbbbbbbb'}]),
@@ -39,6 +40,10 @@ describe('isRoomMessage', () => {
 
   it('accepts playback with no track', () => {
     expect(isRoomMessage({type: 'playback', from: 'a', playback: {...wire, trackId: null}})).toBe(true)
+  })
+
+  it('accepts a policy from 0.5.x without listed', () => {
+    expect(isRoomMessage({type: 'policy', from: 'a', policy: {ownerKey: 'k', ownerPeerId: 'a', ownerName: 'A', lockQueue: false, lockPlayback: false, stamp}})).toBe(true)
   })
 
   it.each([
@@ -77,6 +82,7 @@ describe('isRoomMessage', () => {
     ['policy with string lock', {type: 'policy', from: 'a', policy: {ownerKey: 'k', ownerPeerId: 'a', ownerName: 'A', lockQueue: 'yes', lockPlayback: false, stamp}}],
     ['policy with empty owner key', {type: 'policy', from: 'a', policy: {ownerKey: '', ownerPeerId: 'a', ownerName: 'A', lockQueue: false, lockPlayback: false, stamp}}],
     ['policy with long owner name', {type: 'policy', from: 'a', policy: {ownerKey: 'k', ownerPeerId: 'a', ownerName: 'x'.repeat(41), lockQueue: false, lockPlayback: false, stamp}}],
+    ['policy with unknown listed', {type: 'policy', from: 'a', policy: {ownerKey: 'k', ownerPeerId: 'a', ownerName: 'A', lockQueue: false, lockPlayback: false, listed: 'everyone', stamp}}],
     ['state with bad policy', {type: 'state', from: 'a', name: 'Ana', tracks: [], removed: [], playback: wire, policy: {ownerKey: 'k'}}],
     ['track with huge rank', {type: 'add', from: 'a', tracks: [{...track, rank: 'a'.repeat(257)}]}],
     ['move without rank', {type: 'move', from: 'a', trackId: 'a:1', moved: {counter: 2, peerId: 'a'}}],

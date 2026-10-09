@@ -2,7 +2,7 @@ import {generateKeyBetween, generateNKeysBetween} from 'fractional-indexing'
 import {fnv1a} from './hash'
 import {LamportClock, ZERO_STAMP, compareStamps} from './stamp'
 import {MAX_REMOVED} from './validate'
-import type {Locks, Outgoing, Peer, PeerId, Playback, PlaybackWire, Policy, RoomMessage, Track, Via, VideoMeta} from './types'
+import type {Listed, Locks, Outgoing, Peer, PeerId, Playback, PlaybackWire, Policy, RoomMessage, Track, Via, VideoMeta} from './types'
 
 export const RELAY_TRANSIT_MS = 250
 export const DEFAULT_DIRECT_TRANSIT_MS = 50
@@ -132,7 +132,7 @@ export class RoomState {
   /** Quien crea la sala se hace dueño. Si ya hay dueño no hace nada. */
   claimRoom(locks: Locks = {}): Outgoing[] {
     if (this.policy !== undefined) return []
-    return [this.writePolicy({lockQueue: locks.lockQueue ?? false, lockPlayback: locks.lockPlayback ?? false})]
+    return [this.writePolicy({lockQueue: locks.lockQueue ?? false, lockPlayback: locks.lockPlayback ?? false, listed: 'none'})]
   }
 
   /** Solo el dueño. Lo que no se indique se mantiene. */
@@ -141,7 +141,22 @@ export class RoomState {
     return [
       this.writePolicy({
         lockQueue: locks.lockQueue ?? this.policy.lockQueue,
-        lockPlayback: locks.lockPlayback ?? this.policy.lockPlayback
+        lockPlayback: locks.lockPlayback ?? this.policy.lockPlayback,
+        listed: this.policy.listed ?? 'none'
+      })
+    ]
+  }
+
+  /** Solo el dueño. Listarla para todos activa los dos bloqueos (se pueden quitar después). */
+  setListed(listed: Listed): Outgoing[] {
+    if (!this.isOwner() || this.policy === undefined) return []
+    if ((this.policy.listed ?? 'none') === listed) return []
+    const lockAll = listed === 'global'
+    return [
+      this.writePolicy({
+        lockQueue: lockAll || this.policy.lockQueue,
+        lockPlayback: lockAll || this.policy.lockPlayback,
+        listed
       })
     ]
   }
@@ -424,13 +439,14 @@ export class RoomState {
     return message
   }
 
-  private writePolicy(locks: {lockQueue: boolean; lockPlayback: boolean}): Outgoing {
+  private writePolicy(settings: {lockQueue: boolean; lockPlayback: boolean; listed: Listed}): Outgoing {
     this.policy = {
       ownerKey: this.opts.ownerKey,
       ownerPeerId: this.opts.peerId,
       ownerName: this.name,
-      lockQueue: locks.lockQueue,
-      lockPlayback: locks.lockPlayback,
+      lockQueue: settings.lockQueue,
+      lockPlayback: settings.lockPlayback,
+      listed: settings.listed,
       stamp: this.clock.tick()
     }
     this.emit()
@@ -452,10 +468,11 @@ export class RoomState {
       ownerName: wire.ownerName,
       lockQueue: wire.lockQueue,
       lockPlayback: wire.lockPlayback,
+      listed: wire.listed ?? 'none',
       stamp: {counter: wire.stamp.counter, peerId: wire.stamp.peerId}
     }
     if (this.isOwner() && wire.ownerPeerId !== this.opts.peerId) {
-      return [this.writePolicy({lockQueue: wire.lockQueue, lockPlayback: wire.lockPlayback})]
+      return [this.writePolicy({lockQueue: wire.lockQueue, lockPlayback: wire.lockPlayback, listed: wire.listed ?? 'none'})]
     }
     return []
   }

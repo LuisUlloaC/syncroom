@@ -1,6 +1,6 @@
 import {generateKeyBetween} from 'fractional-indexing'
 import {MAX_COUNTER} from './stamp'
-import type {PlaybackWire, Policy, RoomMessage, Stamp, Track} from './types'
+import type {Listed, PlaybackWire, Policy, RoomMessage, Stamp, Track} from './types'
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
 const MAX_ID = 64
@@ -78,6 +78,8 @@ function isPlaybackWire(value: unknown): value is PlaybackWire {
   )
 }
 
+const LISTED: readonly Listed[] = ['none', 'global', 'group']
+
 function isPolicy(value: unknown): value is Policy {
   return (
     isDict(value) &&
@@ -86,6 +88,7 @@ function isPolicy(value: unknown): value is Policy {
     isText(value.ownerName, MAX_NAME) &&
     typeof value.lockQueue === 'boolean' &&
     typeof value.lockPlayback === 'boolean' &&
+    (value.listed === undefined || LISTED.includes(value.listed as Listed)) &&
     isStamp(value.stamp)
   )
 }

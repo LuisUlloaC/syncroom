@@ -460,6 +460,7 @@ describe('room policy', () => {
       mine: true,
       lockQueue: true,
       lockPlayback: false,
+      listed: 'none',
       canEditQueue: true,
       canControlPlayback: true
     })
@@ -483,6 +484,7 @@ describe('room policy', () => {
       mine: false,
       lockQueue: true,
       lockPlayback: false,
+      listed: 'none',
       canEditQueue: false,
       canControlPlayback: true
     })

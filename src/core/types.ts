@@ -43,6 +43,9 @@ export interface Peer {
   name: string
 }
 
+/** Quién puede encontrar la sala en la lista: nadie (solo con código), cualquiera o un grupo. */
+export type Listed = 'none' | 'global' | 'group'
+
 /**
  * Quién manda en la sala y qué bloquea. `ownerKey` es estable por instalación (sobrevive a salir y
  * volver); `ownerPeerId` es el peer actual del dueño. Solo gana una política más nueva del mismo dueño.
@@ -53,6 +56,8 @@ export interface Policy {
   ownerName: string
   lockQueue: boolean
   lockPlayback: boolean
+  /** Ausente en las políticas de 0.5.x: equivale a 'none'. La palabra de grupo nunca viaja. */
+  listed?: Listed
   stamp: Stamp
 }
 

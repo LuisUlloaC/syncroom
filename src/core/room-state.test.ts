@@ -613,6 +613,44 @@ describe('room policy (owner and locks)', () => {
     a.setLocks({lockQueue: true})
     expect(a.digest()).not.toBe(before)
   })
+
+  it('only the owner lists the room, and everyone sees how it is listed', () => {
+    const {a, b} = ownedRoom()
+    expect(a.getPolicy()?.listed).toBe('none')
+    expect(b.setListed('global')).toEqual([])
+    settle(a, b, [], a.setListed('group'))
+    expect(b.getPolicy()?.listed).toBe('group')
+    expect(a.setListed('group')).toEqual([])
+  })
+
+  it('listing it for everyone turns both locks on; a group leaves them as they were', () => {
+    const {a, b} = ownedRoom()
+    settle(a, b, [], a.setListed('group'))
+    expect(b.getPolicy()).toMatchObject({listed: 'group', lockQueue: false, lockPlayback: false})
+    settle(a, b, [], a.setListed('global'))
+    expect(b.getPolicy()).toMatchObject({listed: 'global', lockQueue: true, lockPlayback: true})
+    // Quitar los bloqueos a mano sigue siendo posible y no cambia la visibilidad.
+    settle(a, b, [], a.setLocks({lockQueue: false}))
+    expect(b.getPolicy()).toMatchObject({listed: 'global', lockQueue: false, lockPlayback: true})
+  })
+
+  it('the owner keeps the listing when coming back', () => {
+    const {clock, a, b} = ownedRoom()
+    settle(a, b, [], a.setListed('global'))
+    for (const o of a.leave()) b.receive(o.msg, 'relay')
+    const a2 = peer('a2', clock, 'key-a')
+    const reclaim = a2.join().flatMap(o => b.receive(o.msg, 'direct')).flatMap(o => a2.receive(o.msg, 'direct'))
+    for (const o of reclaim) b.receive(o.msg, 'direct')
+    expect(b.getPolicy()).toMatchObject({ownerPeerId: 'a2', listed: 'global'})
+  })
+
+  it('a policy from 0.5.x (without listed) means not listed', () => {
+    const clock = {t: 1000}
+    const b = peer('b', clock)
+    const stamp = {counter: 3, peerId: 'a'}
+    b.receive({type: 'policy', from: 'a', policy: {ownerKey: 'key-a', ownerPeerId: 'a', ownerName: 'A', lockQueue: false, lockPlayback: false, stamp}}, 'relay')
+    expect(b.getPolicy()?.listed).toBe('none')
+  })
 })
 
 describe('presence', () => {

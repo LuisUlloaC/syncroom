@@ -1,6 +1,6 @@
 import {RoomState} from '../core/room-state'
 import {reconcile, type Desired, type PlayerStatus} from '../core/sync'
-import type {Locks, Outgoing, Peer} from '../core/types'
+import type {Listed, Locks, Outgoing, Peer} from '../core/types'
 import {MAX_CHAT, isRoomMessage} from '../core/validate'
 import type {EngineLink, EngineToHost} from '../protocol/bridge'
 import type {ResolvedLink} from '../resolve/youtube'
@@ -59,6 +59,8 @@ export interface PolicyView {
   mine: boolean
   lockQueue: boolean
   lockPlayback: boolean
+  /** Cómo está listada la sala (solo el dueño lo cambia). */
+  listed: Listed
   canEditQueue: boolean
   canControlPlayback: boolean
 }
@@ -266,6 +268,14 @@ export class RoomSession {
     this.emit()
   }
 
+  /** Solo surte efecto si soy el dueño. */
+  setListed(listed: Listed): void {
+    const out = this.state.setListed(listed)
+    if (out.length === 0) return
+    this.sendAll(out)
+    this.emit()
+  }
+
   private policyView(): PolicyView | undefined {
     const policy = this.state.getPolicy()
     if (policy === undefined) return undefined
@@ -274,6 +284,7 @@ export class RoomSession {
       mine: this.state.isOwner(),
       lockQueue: policy.lockQueue,
       lockPlayback: policy.lockPlayback,
+      listed: policy.listed ?? 'none',
       canEditQueue: this.state.mayEditQueue(),
       canControlPlayback: this.state.mayControlPlayback()
     }
