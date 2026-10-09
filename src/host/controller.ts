@@ -4,10 +4,11 @@ import {join} from 'node:path'
 import * as vscode from 'vscode'
 import {generatePeerId, generateRoomCode} from '../core/ids'
 import {DEFAULT_RELAYS} from '../protocol/defaults'
-import type {Locks} from '../core/types'
+import type {Listed, Locks} from '../core/types'
 import type {ViewState} from '../protocol/webview'
 import {resolveLink} from '../resolve/youtube'
 import {BridgeServer} from './bridge-server'
+import {Discovery} from './discovery/service'
 import {locateBrowser} from './engine/browser-locator'
 import {EngineProcess, buildEngineArgs} from './engine/engine-process'
 import {MAX_NAME, RoomSession} from './session'
@@ -42,7 +43,15 @@ export class RoomController implements vscode.Disposable {
   readonly onDidChange = this.changed.event
   private readonly output = vscode.window.createOutputChannel('SyncRoom')
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  private readonly discovery: Discovery
+
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.discovery = new Discovery(context)
+    this.discovery.onDidChange(() => {
+      this.syncDiscovery()
+      this.changed.fire()
+    })
+  }
 
   get session(): RoomSession | undefined {
     return this.active?.session
@@ -50,8 +59,14 @@ export class RoomController implements vscode.Disposable {
 
   viewState(): ViewState {
     const room = this.active
-    if (room === undefined) return {inRoom: false}
-    return {inRoom: true, room: room.session.view(), playerVisible: room.visible}
+    if (room === undefined) return {inRoom: false, directory: this.discovery.directoryView()}
+    return {
+      inRoom: true,
+      room: room.session.view(),
+      playerVisible: room.visible,
+      listing: this.discovery.listing(),
+      groups: this.discovery.groupWords()
+    }
   }
 
   /** Entra en la sala `code`, o crea una nueva (y se hace dueño) si no se da código. */
@@ -77,6 +92,48 @@ export class RoomController implements vscode.Disposable {
     }
   }
 
+  /** Solo el dueño: quién puede encontrar la sala. Con 'group', `group` es la palabra del grupo. */
+  setListed(listed: Listed, group?: string): void {
+    const session = this.active?.session
+    if (session === undefined) return
+    this.discovery.setRoomGroup(session.view().code, listed === 'group' ? group : undefined)
+    session.setListed(listed)
+    // Cambiar de un grupo a otro no cambia la política: el anuncio se rehace aquí.
+    this.syncDiscovery()
+  }
+
+  addGroup(): Promise<string | undefined> {
+    return this.discovery.addGroup()
+  }
+
+  removeGroup(word: string): Promise<void> {
+    return this.discovery.removeGroup(word)
+  }
+
+  hide(code: string, owner: boolean): void {
+    this.discovery.hide(code, owner)
+  }
+
+  unhideAll(): void {
+    this.discovery.unhideAll()
+  }
+
+  setLobbyVisible(visible: boolean): void {
+    this.discovery.setLobbyVisible(visible)
+  }
+
+  /** La sala propia en la lista: la anuncia o la retira. Listada en un grupo que ya no tengo → privada. */
+  private syncDiscovery(): void {
+    const session = this.active?.session
+    if (session === undefined) return
+    const view = session.view()
+    if (view.policy?.mine === true && view.policy.listed === 'group' && !this.discovery.hasGroupFor(view.code)) {
+      session.setListed('none') // su onChange vuelve a pasar por aquí
+      return
+    }
+    this.discovery.syncRoom(view)
+  }
+
   /** Clave estable de esta instalación: con ella se reconoce al dueño aunque salga y vuelva. */
   private ownerKey(): string {
     const saved = this.context.globalState.get<string>('ownerKey')
@@ -90,6 +147,7 @@ export class RoomController implements vscode.Disposable {
     const room = this.active
     if (room === undefined) return
     this.active = undefined
+    const retiring = this.discovery.leaveRoom()
     room.expectedExit = true
     this.log('leaving the room')
     room.session.dispose()
@@ -98,6 +156,7 @@ export class RoomController implements vscode.Disposable {
     await room.bridge.close()
     // El perfil es desechable: así nunca queda un navegador «restaurando» sesiones anteriores.
     await rm(room.profileDir, {recursive: true, force: true, maxRetries: 3, retryDelay: 200}).catch(() => undefined)
+    await retiring
     await vscode.commands.executeCommand('setContext', 'syncroom.inRoom', false)
     this.changed.fire()
   }
@@ -142,6 +201,7 @@ export class RoomController implements vscode.Disposable {
 
   dispose(): void {
     void this.leave()
+    this.discovery.dispose()
     this.changed.dispose()
     this.output.dispose()
   }
@@ -199,6 +259,7 @@ export class RoomController implements vscode.Disposable {
         this.log(`fault reported: ${fault}`)
         void vscode.window.showWarningMessage(t('SyncRoom could not load the YouTube player. Check that youtube.com is reachable from this computer, then run "SyncRoom: Show Log".'))
       }
+      this.syncDiscovery()
       this.changed.fire()
     })
     room.engine.onExit(() => {

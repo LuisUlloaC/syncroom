@@ -1,6 +1,19 @@
+import type {Listed} from '../core/types'
+import type {DirectoryView} from '../host/discovery/directory'
 import type {RoomView} from '../host/session'
 
-export type ViewState = {inRoom: false} | {inRoom: true; room: RoomView; playerVisible: boolean}
+/** La lista del lobby y tus grupos (palabras guardadas en este equipo). */
+export type LobbyView = DirectoryView & {groups: string[]}
+
+/** Solo para el dueño con la sala listada. `relaysOk: null` = aún no salió el primer anuncio. */
+export interface ListingView {
+  relaysOk: number | null
+  group: string | null
+}
+
+export type ViewState =
+  | {inRoom: false; directory: LobbyView}
+  | {inRoom: true; room: RoomView; playerVisible: boolean; listing: ListingView | undefined; groups: string[]}
 
 /** Del extension host a la vista lateral. */
 export type HostToWebview = {t: 'state'; state: ViewState}
@@ -26,3 +39,10 @@ export type WebviewToHost =
   | {t: 'playNext'; trackId: string}
   | {t: 'say'; text: string}
   | {t: 'locks'; lockQueue: boolean; lockPlayback: boolean}
+  /** Con 'group', `group` es la palabra del grupo. */
+  | {t: 'listed'; listed: Listed; group?: string}
+  | {t: 'hide'; code: string; owner: boolean}
+  | {t: 'unhideAll'}
+  /** El host pide la palabra; con `thenList` la sala pasa a ese grupo. */
+  | {t: 'addGroup'; thenList: boolean}
+  | {t: 'removeGroup'; word: string}

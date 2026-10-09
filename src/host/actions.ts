@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import {formatRoomCode, normalizeRoomCode} from '../core/ids'
+import type {Listed} from '../core/types'
 import {ResolveError} from '../resolve/youtube'
 import type {RoomController} from './controller'
 
@@ -100,6 +101,28 @@ export class Actions {
 
   setLocks(lockQueue: boolean, lockPlayback: boolean): void {
     this.controller.setLocks({lockQueue, lockPlayback})
+  }
+
+  setListed(listed: Listed, group?: string): void {
+    this.controller.setListed(listed, group)
+  }
+
+  /** Pide la palabra; con `thenList` la sala actual pasa a ese grupo. */
+  async addGroup(thenList: boolean): Promise<void> {
+    const word = await this.controller.addGroup()
+    if (word !== undefined && thenList) this.controller.setListed('group', word)
+  }
+
+  async removeGroup(word: string): Promise<void> {
+    await this.controller.removeGroup(word)
+  }
+
+  hide(code: string, owner: boolean): void {
+    this.controller.hide(code, owner)
+  }
+
+  unhideAll(): void {
+    this.controller.unhideAll()
   }
 
   seek(positionS: number): void {

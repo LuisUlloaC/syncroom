@@ -34,8 +34,17 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     view.webview.options = {enableScripts: true, localResourceRoots: [root]}
     view.webview.html = this.html(view.webview, root)
     view.webview.onDidReceiveMessage((msg: WebviewToHost) => void this.handle(msg))
-    view.onDidChangeVisibility(() => this.post())
+    // La lista del lobby solo se suscribe a los relays mientras la vista principal se ve.
+    const reportVisibility = (visible: boolean): void => {
+      if (this.mode === 'room') this.controller.setLobbyVisible(visible)
+    }
+    reportVisibility(view.visible)
+    view.onDidChangeVisibility(() => {
+      reportVisibility(view.visible)
+      this.post()
+    })
     view.onDidDispose(() => {
+      reportVisibility(false)
       if (this.view === view) this.view = undefined
     })
     this.post()
@@ -122,6 +131,23 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         break
       case 'locks':
         this.actions.setLocks(msg.lockQueue === true, msg.lockPlayback === true)
+        break
+      case 'listed':
+        if (msg.listed === 'none' || msg.listed === 'global' || msg.listed === 'group') {
+          this.actions.setListed(msg.listed, typeof msg.group === 'string' ? msg.group : undefined)
+        }
+        break
+      case 'hide':
+        if (typeof msg.code === 'string') this.actions.hide(msg.code, msg.owner === true)
+        break
+      case 'unhideAll':
+        this.actions.unhideAll()
+        break
+      case 'addGroup':
+        await this.actions.addGroup(msg.thenList === true)
+        break
+      case 'removeGroup':
+        if (typeof msg.word === 'string') await this.actions.removeGroup(msg.word)
         break
     }
   }

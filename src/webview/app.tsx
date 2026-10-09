@@ -17,7 +17,10 @@ const s = (key: string): string => strings[key] ?? key
 const post = (message: WebviewToHost): void => vscode.postMessage(message)
 
 export function App() {
-  const [state, setState] = useState<ViewState>({inRoom: false})
+  const [state, setState] = useState<ViewState>({
+    inRoom: false,
+    directory: {status: 'searching', rooms: [], hiddenCount: 0, groups: []}
+  })
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<HostToWebview>): void => {
