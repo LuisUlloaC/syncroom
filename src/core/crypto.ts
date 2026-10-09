@@ -44,6 +44,15 @@ export function importAesKey(raw: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt'])
 }
 
+export function importHmacKey(raw: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', raw, {name: 'HMAC', hash: 'SHA-256'}, false, ['sign'])
+}
+
+/** HMAC-SHA-256 de `text` en hexadecimal. */
+export async function hmacHex(key: CryptoKey, text: string): Promise<string> {
+  return hex(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(text))))
+}
+
 export async function deriveRoomKeys(code: string): Promise<RoomKeys> {
   const bits = await stretch(code, ROOM_SALT, 64)
   return {aesKey: await importAesKey(bits.slice(0, 32)), tag: hex(bits.slice(32, 48)), roomId: hex(bits.slice(48, 64))}

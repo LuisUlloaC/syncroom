@@ -16,6 +16,7 @@ import {
   readAnnouncement,
   type Announcement
 } from './announcement'
+import {sha256Hex} from '../../core/crypto'
 import {deriveGroupKeys} from './group-key'
 import {asEvent} from './testing'
 
@@ -85,6 +86,30 @@ describe('announcement events', () => {
     expect(a).toMatch(/^[0-9a-f]{32}$/)
     expect(a).not.toBe(await announcementId(PUBLIC_SCOPE, 'ABCD2346'))
     expect(a).not.toBe(await announcementId(group, 'ABCD2345'))
+  })
+
+  it('a group id is keyed with the word: the public tag alone does not let anyone test codes against it', async () => {
+    const keys = await deriveGroupKeys('motorflash-front')
+    const other = await deriveGroupKeys('motorflash-back')
+    const id = await announcementId(groupScope(keys), 'ABCD2345')
+    expect(id).toMatch(/^[0-9a-f]{32}$/)
+    expect(id).not.toBe((await sha256Hex(`${keys.tag}:ABCD2345`)).slice(0, 32))
+    expect(id).not.toBe(await announcementId(groupScope(other), 'ABCD2345'))
+    // Misma etiqueta, otra palabra: el `d` depende del secreto, no solo de la etiqueta.
+    expect(id).not.toBe(await announcementId({...groupScope(keys), idKey: other.idKey}, 'ABCD2345'))
+    expect(id).toBe(await announcementId(groupScope(await deriveGroupKeys('Motorflash-Front')), 'ABCD2345'))
+  })
+
+  it('the public id stays sha256(tag:code), since the public code travels in clear anyway', async () => {
+    expect(await announcementId(PUBLIC_SCOPE, 'ABCD2345')).toBe((await sha256Hex(`${PUBLIC_TAG}:ABCD2345`)).slice(0, 32))
+  })
+
+  it('a group tombstone shares the key of its announcement', async () => {
+    const scope = groupScope(await deriveGroupKeys('motorflash-front'))
+    const announced = await readAnnouncement(asEvent(await buildAnnouncement(scope, base, NOW)), [scope])
+    const closed = await readAnnouncement(asEvent(await buildTombstone(scope, base.code, NOW + 1)), [scope])
+    expect(announced?.announcement).toEqual(base)
+    expect(closed).toMatchObject({key: announced?.key, announcement: null})
   })
 
   it('a public announcement goes in clear with the public tag and expires on the relay', async () => {

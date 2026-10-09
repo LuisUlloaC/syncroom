@@ -1,5 +1,5 @@
 import type {Event, EventTemplate} from 'nostr-tools/core'
-import {decryptText, encryptText, sha256Hex} from '../../core/crypto'
+import {decryptText, encryptText, hmacHex, sha256Hex} from '../../core/crypto'
 import {normalizeRoomCode} from '../../core/ids'
 import type {GroupKeys} from './group-key'
 
@@ -32,6 +32,8 @@ export interface Announcement {
 export interface Scope {
   tag: string
   key?: CryptoKey
+  /** Clave HMAC del `d` (solo grupos). */
+  idKey?: CryptoKey
   /** Palabra del grupo; null en la lista pública. */
   group: string | null
 }
@@ -39,7 +41,7 @@ export interface Scope {
 export const PUBLIC_SCOPE: Scope = {tag: PUBLIC_TAG, group: null}
 
 export function groupScope(keys: GroupKeys): Scope {
-  return {tag: keys.tag, key: keys.aesKey, group: keys.word}
+  return {tag: keys.tag, key: keys.aesKey, idKey: keys.idKey, group: keys.word}
 }
 
 /** Lo que llega de un relay, ya validado. `announcement: null` = la sala se dio de baja (lápida). */
@@ -94,9 +96,14 @@ export function parseAnnouncement(value: unknown): Announcement | undefined {
   return {v: 1, code: v.code, owner, playing, listeners, locks: {queue, playback}}
 }
 
-/** `d` del anuncio: estable por sala y ámbito, y no revela el código fuera del ámbito. */
+/**
+ * `d` del anuncio: estable por sala y ámbito. En un grupo es un HMAC con una clave sacada de la palabra:
+ * con un simple hash de etiqueta (pública) + código bastaría probar los ~2^39 códigos para sacarlo.
+ * En la lista pública el código ya va en claro, así que basta el hash.
+ */
 export async function announcementId(scope: Scope, code: string): Promise<string> {
-  return (await sha256Hex(`${scope.tag}:${code}`)).slice(0, 32)
+  const id = scope.idKey === undefined ? await sha256Hex(`${scope.tag}:${code}`) : await hmacHex(scope.idKey, code)
+  return id.slice(0, 32)
 }
 
 export async function buildAnnouncement(scope: Scope, announcement: Announcement, createdAt: number): Promise<EventTemplate> {
