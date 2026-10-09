@@ -8,6 +8,7 @@ import type {Listed, Locks} from '../core/types'
 import type {ViewState} from '../protocol/webview'
 import {resolveLink} from '../resolve/youtube'
 import {BridgeServer} from './bridge-server'
+import {needsDemotion} from './discovery/demotion'
 import {Discovery} from './discovery/service'
 import {locateBrowser} from './engine/browser-locator'
 import {EngineProcess, buildEngineArgs} from './engine/engine-process'
@@ -131,8 +132,13 @@ export class RoomController implements vscode.Disposable {
     const session = this.active?.session
     if (session === undefined) return
     const view = session.view()
-    if (view.policy?.mine === true && view.policy.listed === 'group' && !this.discovery.hasGroupFor(view.code)) {
-      session.setListed('none') // su onChange vuelve a pasar por aquí
+    const hasGroupFor = (code: string): boolean => this.discovery.hasGroupFor(code)
+    if (needsDemotion(view, hasGroupFor)) {
+      // Fuera de la pila actual: se llega aquí también en mitad de RoomState.receive (al reclamar la sala).
+      queueMicrotask(() => {
+        if (this.active?.session !== session || !needsDemotion(session.view(), hasGroupFor)) return
+        session.setListed('none') // su onChange vuelve a pasar por aquí
+      })
       return
     }
     this.discovery.syncRoom(view)

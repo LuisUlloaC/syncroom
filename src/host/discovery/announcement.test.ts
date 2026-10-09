@@ -31,6 +31,12 @@ describe('capAnnouncement', () => {
     expect(out?.playing).toBe('t'.repeat(120))
   })
 
+  it('strips invisible and bidi characters, tag characters included', () => {
+    const out = capAnnouncement({...base, owner: '\u200fL\u200bu\ufeffi\u061cs\u2060\u2064\u{e0001}\u{e007f}', playing: '\u200eSong\u200d'})
+    expect(out?.owner).toBe('Luis')
+    expect(out?.playing).toBe('Song')
+  })
+
   it.each([
     [0, 1],
     [250, 99],
@@ -67,6 +73,12 @@ describe('parseAnnouncement', () => {
     ['long owner', {...base, owner: 'x'.repeat(33)}],
     ['owner with a newline', {...base, owner: 'Lu\nis'}],
     ['owner with a direction mark', {...base, owner: 'Lu\u202eis'}],
+    ['owner with a right-to-left mark', {...base, owner: 'Lu\u200fis'}],
+    ['owner with a byte order mark', {...base, owner: '\ufeffLuis'}],
+    ['owner with a zero-width space', {...base, owner: 'Lu\u200bis'}],
+    ['owner with an Arabic letter mark', {...base, owner: 'Lu\u061cis'}],
+    ['owner with a word joiner', {...base, owner: 'Lu\u2060is'}],
+    ['owner with a tag character', {...base, owner: 'Luis\u{e0041}'}],
     ['long title', {...base, playing: 't'.repeat(121)}],
     ['empty title', {...base, playing: ''}],
     ['zero listeners', {...base, listeners: 0}],

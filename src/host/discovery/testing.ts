@@ -29,6 +29,11 @@ export class FakeClock implements Clock {
     return this.t
   }
 
+  /** Mueve el reloj sin ejecutar lo que venza, como un equipo que se suspende: vencerá en el próximo `advance`. */
+  jump(ms: number): void {
+    this.t += ms
+  }
+
   advance(ms: number): void {
     const end = this.t + ms
     for (;;) {
@@ -59,10 +64,21 @@ export class FakeNet implements NostrNet {
   relaysOk = 4
   connectedRelays = 4
   closed = false
+  /** Con `hold`, ningún publish responde hasta `release()`: relays lentos. */
+  hold = false
+  private held: (() => void)[] = []
 
   publish(template: EventTemplate): Promise<number> {
     this.published.push(template)
-    return Promise.resolve(this.relaysOk)
+    if (!this.hold) return Promise.resolve(this.relaysOk)
+    return new Promise(done => this.held.push(() => done(this.relaysOk)))
+  }
+
+  /** Responde a todo lo retenido. */
+  release(): void {
+    const held = this.held
+    this.held = []
+    for (const done of held) done()
   }
 
   subscribe(filter: Filter, handlers: {onevent: (event: Event) => void; oneose: () => void}): () => void {

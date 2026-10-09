@@ -15,9 +15,12 @@ export const MAX_PLAYING = 120
 export const MAX_LISTENERS = 99
 const MAX_CONTENT = 2000
 const MAX_ID = 64
-/** Control, separadores de línea y marcas de dirección: con ellas un nombre puede fingir ser otro. */
-const UNSAFE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/
-const UNSAFE_ALL = new RegExp(UNSAFE.source, 'g')
+/**
+ * Control, separadores de línea, marcas de dirección, caracteres invisibles (ancho cero, unión de palabras,
+ * BOM) y etiquetas Unicode: con ellos un nombre puede esconder letras o fingir ser otro.
+ */
+const UNSAFE = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2064\u2066-\u2069\ufeff\u{e0000}-\u{e007f}]/u
+const UNSAFE_ALL = new RegExp(UNSAFE.source, 'gu')
 
 export interface Announcement {
   v: 1

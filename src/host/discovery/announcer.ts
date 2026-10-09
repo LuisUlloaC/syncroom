@@ -24,8 +24,16 @@ export class Announcer {
   private lastCreatedAt = 0
   private renewTimer: unknown
   private pendingTimer: unknown
-  /** Todo lo que sale a la red va en fila: una lápida nunca adelanta a un anuncio en vuelo. */
+  /** La sala cuyo anuncio llegó a salir y no se ha retirado: solo eso necesita lápida. */
+  private announced: Current | undefined
+  /**
+   * Lo que se prepara para la red va en fila (solo la preparación, que es local y rápida): un anuncio
+   * retirado mientras esperaba su turno ya no sale. Las respuestas de los relays no retienen la fila:
+   * el orden en el relay lo garantiza el created_at creciente.
+   */
   private chain: Promise<void> = Promise.resolve()
+  /** Lápidas y borrados enviados que aún esperan respuesta: stop() los espera (con tope). */
+  private readonly retiring = new Set<Promise<unknown>>()
 
   constructor(private readonly opts: {net: NostrNet; clock: Clock; onStatus: (relaysOk: number) => void}) {}
 
@@ -60,7 +68,8 @@ export class Announcer {
     const timeout = new Promise<void>(done => {
       timer = this.opts.clock.timers.setTimeout(done, STOP_TIMEOUT_MS)
     })
-    await Promise.race([this.chain, timeout])
+    const sent = this.chain.then(() => Promise.allSettled([...this.retiring]))
+    await Promise.race([sent, timeout])
     this.opts.clock.timers.clearTimeout(timer)
   }
 
@@ -69,23 +78,37 @@ export class Announcer {
     if (current === undefined) return
     this.lastPublishAt = this.opts.clock.now()
     this.publishedKey = keyOf(current)
+    // Una renovación (o cualquier publicación) lleva ya lo último: una publicación temprana pendiente sobra.
+    this.opts.clock.timers.clearTimeout(this.pendingTimer)
+    this.pendingTimer = undefined
     this.opts.clock.timers.clearTimeout(this.renewTimer)
     this.renewTimer = this.opts.clock.timers.setTimeout(() => this.publish(), RENEW_MS)
     const createdAt = this.nextCreatedAt()
     this.enqueue(async () => {
-      // Se retiró (o cambió de sala) mientras esperaba su turno: no resucitarla.
+      // Se retiró (o cambió de sala) mientras esperaba su turno o se cifraba: no resucitarla.
       if (!sameRoom(this.current, current)) return
       const template = await buildAnnouncement(current.scope, current.snapshot, createdAt)
-      this.opts.onStatus(await this.opts.net.publish(template))
+      if (!sameRoom(this.current, current)) return
+      this.announced = current
+      void this.opts.net.publish(template).then(relaysOk => {
+        // La cuenta de un anuncio que estaba en vuelo durante un cambio de ámbito no es del nuevo.
+        if (sameRoom(this.current, current)) this.opts.onStatus(relaysOk)
+      }, () => undefined)
     })
   }
 
   private retire(previous: Current): void {
+    if (!sameRoom(this.announced, previous)) return
+    this.announced = undefined
     const createdAt = this.nextCreatedAt()
     const {scope, snapshot} = previous
     this.enqueue(async () => {
-      await this.opts.net.publish(await buildTombstone(scope, snapshot.code, createdAt))
-      await this.opts.net.publish(await buildDeletion(scope, snapshot.code, this.opts.net.pubkey, createdAt))
+      const tombstone = await buildTombstone(scope, snapshot.code, createdAt)
+      const deletion = await buildDeletion(scope, snapshot.code, this.opts.net.pubkey, createdAt)
+      // A la vez: el borrado no espera a que el relay más lento confirme la lápida.
+      const sent = Promise.allSettled([this.opts.net.publish(tombstone), this.opts.net.publish(deletion)])
+      this.retiring.add(sent)
+      void sent.then(() => this.retiring.delete(sent))
     })
   }
 

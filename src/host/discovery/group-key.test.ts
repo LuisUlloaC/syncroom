@@ -7,6 +7,13 @@ describe('group word', () => {
     expect(normalizeGroupWord('  Motorflash   Front ')).toBe('motorflash front')
   })
 
+  it('an accented word typed decomposed (macOS) or composed (Windows) is the same word', async () => {
+    const decomposed = 'cafe\u0301 group'
+    const composed = 'caf\u00e9 group'
+    expect(normalizeGroupWord(decomposed)).toBe(composed)
+    expect((await deriveGroupKeys(decomposed)).tag).toBe((await deriveGroupKeys(composed)).tag)
+  })
+
   it.each(['', 'short', '1234567', 'x'.repeat(65)])('rejects %j', word => {
     expect(normalizeGroupWord(word)).toBeUndefined()
   })

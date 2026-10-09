@@ -15,9 +15,12 @@ export interface GroupKeys {
   idKey: CryptoKey
 }
 
-/** La palabra es una contraseña compartida: la etiqueta es pública y se podría atacar por diccionario. */
+/**
+ * La palabra es una contraseña compartida: la etiqueta es pública y se podría atacar por diccionario.
+ * NFC primero: macOS teclea los acentos descompuestos y Windows compuestos; sin esto el grupo se partiría.
+ */
 export function normalizeGroupWord(input: string): string | undefined {
-  const word = input.trim().toLowerCase().replace(/\s+/g, ' ')
+  const word = input.normalize('NFC').trim().toLowerCase().replace(/\s+/g, ' ')
   return word.length >= MIN_GROUP_WORD && word.length <= MAX_GROUP_WORD ? word : undefined
 }
 
