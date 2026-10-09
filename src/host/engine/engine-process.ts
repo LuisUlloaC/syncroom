@@ -30,10 +30,13 @@ export function buildEngineArgs(options: EngineArgsOptions): string[] {
     // de src/engine-page/index.html; si cambia uno, cambia el otro). Probado en oculto el 2026-10-09.
     '--auto-select-tab-capture-source-by-title=SyncRoom'
   ]
-  // Oculto a 480×270: el reproductor ocupa toda la página y la captura sale 16:9, sin franjas.
+  // El reproductor ocupa toda la página, así que la captura tiene la forma de la página. El Edge
+  // oculto resta ~92 px de alto a la ventana (medido el 2026-10-09: 480×270 → página 492×178,
+  // vídeo con franjas laterales y 174 px de alto). 480×400 → página 492×308: casi 16:9 y el vídeo
+  // entero a 480 de ancho; la vista lateral recorta las franjas que queden (object-fit: cover).
   return options.visible
     ? [...common, `--app=${options.url}`, '--window-size=420,320', ...KEEP_PLAYING_WHEN_COVERED]
-    : [...common, '--headless=new', '--window-size=480,270', options.url]
+    : [...common, '--headless=new', '--window-size=480,400', options.url]
 }
 
 export class EngineProcess {

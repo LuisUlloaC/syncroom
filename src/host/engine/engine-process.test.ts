@@ -14,7 +14,7 @@ describe('buildEngineArgs', () => {
       '--autoplay-policy=no-user-gesture-required',
       '--auto-select-tab-capture-source-by-title=SyncRoom',
       '--headless=new',
-      '--window-size=480,270',
+      '--window-size=480,400',
       'http://127.0.0.1:5000/?t=abc'
     ])
   })

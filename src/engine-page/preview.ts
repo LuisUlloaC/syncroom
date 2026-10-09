@@ -40,6 +40,7 @@ export class Preview {
     }
     this.track = track
     const {width, height} = track.getSettings()
+    this.send({t: 'log', text: `preview capture ${width ?? '?'}x${height ?? '?'} of a ${innerWidth}x${innerHeight} page`})
     this.send({t: 'preview', state: 'on', width, height})
     track.onended = () => {
       if (this.track === track) this.stop()
