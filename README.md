@@ -10,6 +10,7 @@ Listen to YouTube together without leaving VS Code. One person creates a room, s
 3. Paste a YouTube video or playlist link. Anyone in the room can add, reorder, skip, pause or seek.
 4. The chat has its own icon in the activity bar; unread messages show as a badge on it.
 5. Whoever created the room can lock the queue and the playback with the two toggles in the queue header, so only they can change the list or play, pause and skip.
+6. The owner can choose **Who can find this room**: private (code only), public, or a group. Public and group rooms appear under **Open rooms** in the lobby. A group is a shared word (at least 8 characters): add it with **+ Group** and you will see the rooms listed for it.
 
 There is no account and no SyncRoom server. Rooms exist only while someone is in them.
 
@@ -47,6 +48,7 @@ There is no account and no SyncRoom server. Rooms exist only while someone is in
 ## Privacy
 
 - Anyone who has the room code can join and control playback. Share it only with people you trust.
+- A public room shows its code to every SyncRoom user. Group rooms are announced encrypted; without the group word they cannot be read.
 - With direct connections on, the other people in the room can see your IP address (this is how
   peer-to-peer works). Turn `syncroom.directConnections` off to send everything through relays.
 - Messages that travel through public relays are encrypted with a key derived from the room code.

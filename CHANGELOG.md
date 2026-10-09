@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- Open rooms: the owner can list a room as **Public** (anyone using SyncRoom sees it) or for a **Group** (only people who added the same group word see it). The lobby shows the open rooms; click one to join.
+- Making a room public turns both locks on; the owner can turn them off.
+- Hide a room or every room from a creator from the ⋯ menu; "Show hidden" brings them back.
+- Group words are stored in VS Code's secret storage and never leave your computer; group announcements are encrypted with a key derived from the word.
+
 ## 0.5.2
 
 - Fixed: most videos showed "This video is unavailable" (embed error 150). YouTube refuses to embed them in a player page served from an IP address; the player page now loads from localhost.
