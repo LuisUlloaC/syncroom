@@ -25,11 +25,15 @@ export function buildEngineArgs(options: EngineArgsOptions): string[] {
     `--user-data-dir=${options.profileDir}`,
     '--no-first-run',
     '--no-default-browser-check',
-    '--autoplay-policy=no-user-gesture-required'
+    '--autoplay-policy=no-user-gesture-required',
+    // Vista previa: getDisplayMedia elige sin preguntar la pestaña titulada «SyncRoom» (el <title>
+    // de src/engine-page/index.html; si cambia uno, cambia el otro). Probado en oculto el 2026-10-09.
+    '--auto-select-tab-capture-source-by-title=SyncRoom'
   ]
+  // Oculto a 480×270: el reproductor ocupa toda la página y la captura sale 16:9, sin franjas.
   return options.visible
     ? [...common, `--app=${options.url}`, '--window-size=420,320', ...KEEP_PLAYING_WHEN_COVERED]
-    : [...common, '--headless=new', options.url]
+    : [...common, '--headless=new', '--window-size=480,270', options.url]
 }
 
 export class EngineProcess {
