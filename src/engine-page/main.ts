@@ -1,6 +1,6 @@
 import type {HostToEngine} from '../protocol/bridge'
 import {HostLink} from './link'
-import {deriveRoomKeys} from './net/crypto'
+import {deriveRoomKeys} from '../core/crypto'
 import {createDirectPath} from './net/direct'
 import {createRelayPath} from './net/relay'
 import {Transport} from './net/transport'

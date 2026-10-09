@@ -7,12 +7,12 @@ export interface RoomKeys {
   roomId: string
 }
 
-const SALT = new TextEncoder().encode('syncroom:v1')
+const ROOM_SALT = 'syncroom:v1'
 // Caro a propósito: el código de sala tiene ~39 bits y la etiqueta es pública.
 const ITERATIONS = 100_000
 const NONCE_BYTES = 12
 
-function hex(bytes: Uint8Array): string {
+export function hex(bytes: Uint8Array): string {
   return [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
@@ -29,13 +29,28 @@ function fromBase64(text: string): Uint8Array<ArrayBuffer> {
   return bytes
 }
 
-export async function deriveRoomKeys(code: string): Promise<RoomKeys> {
-  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(code), 'PBKDF2', false, ['deriveBits'])
-  const bits = new Uint8Array(
-    await crypto.subtle.deriveBits({name: 'PBKDF2', salt: SALT, iterations: ITERATIONS, hash: 'SHA-256'}, material, 512)
+/** PBKDF2-SHA-256 de `secret` con `salt`. Lo usan las salas (código) y los grupos (palabra). */
+export async function stretch(secret: string, salt: string, bytes: number): Promise<Uint8Array<ArrayBuffer>> {
+  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits(
+    {name: 'PBKDF2', salt: new TextEncoder().encode(salt), iterations: ITERATIONS, hash: 'SHA-256'},
+    material,
+    bytes * 8
   )
-  const aesKey = await crypto.subtle.importKey('raw', bits.slice(0, 32), 'AES-GCM', false, ['encrypt', 'decrypt'])
-  return {aesKey, tag: hex(bits.slice(32, 48)), roomId: hex(bits.slice(48, 64))}
+  return new Uint8Array(bits)
+}
+
+export function importAesKey(raw: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt'])
+}
+
+export async function deriveRoomKeys(code: string): Promise<RoomKeys> {
+  const bits = await stretch(code, ROOM_SALT, 64)
+  return {aesKey: await importAesKey(bits.slice(0, 32)), tag: hex(bits.slice(32, 48)), roomId: hex(bits.slice(48, 64))}
+}
+
+export async function sha256Hex(text: string): Promise<string> {
+  return hex(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))))
 }
 
 export async function encryptText(key: CryptoKey, text: string): Promise<string> {

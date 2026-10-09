@@ -1,5 +1,5 @@
 import {joinRoom} from 'trystero'
-import type {RoomKeys} from './crypto'
+import type {RoomKeys} from '../../core/crypto'
 import type {Path} from './transport'
 
 const APP_ID = 'syncroom-vscode'

@@ -1,6 +1,6 @@
 import {SimplePool} from 'nostr-tools/pool'
 import {finalizeEvent, generateSecretKey} from 'nostr-tools/pure'
-import {decryptText, encryptText, type RoomKeys} from './crypto'
+import {decryptText, encryptText, type RoomKeys} from '../../core/crypto'
 import type {Path} from './transport'
 
 /** Rango 20000–29999 = eventos efímeros: los relays los reparten y no los guardan. */

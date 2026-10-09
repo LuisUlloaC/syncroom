@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest'
-import {decryptText, deriveRoomKeys, encryptText} from './crypto'
+import {decryptText, deriveRoomKeys, encryptText, sha256Hex, stretch} from './crypto'
 
 describe('room keys', () => {
   it('derives the same tag, room id and key from the same code', async () => {
@@ -29,6 +29,12 @@ describe('room keys', () => {
     const keys = await deriveRoomKeys('ABCD2345')
     expect(`${keys.tag}${keys.roomId}`.toUpperCase()).not.toContain('ABCD2345')
   })
+
+  it('derives the same keys as 0.5.x, so both versions meet in the same room', async () => {
+    const keys = await deriveRoomKeys('ABCD2345')
+    expect(keys.tag).toBe('c068881634c1f599f33b59c9ef717668')
+    expect(keys.roomId).toBe('31bc58b6774af9b477fdbc75318d8dc9')
+  })
 })
 
 describe('encryption', () => {
@@ -51,5 +57,18 @@ describe('encryption', () => {
     await expect(decryptText(aesKey, '')).rejects.toThrow()
     await expect(decryptText(aesKey, 'not base64 !!!')).rejects.toThrow()
     await expect(decryptText(aesKey, 'AAAA')).rejects.toThrow()
+  })
+})
+
+describe('shared helpers', () => {
+  it('hashes text as hex SHA-256', async () => {
+    expect(await sha256Hex('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+  })
+
+  it('stretches a secret into the requested number of bytes, salt-dependent', async () => {
+    const a = await stretch('secret', 'salt-a', 48)
+    const b = await stretch('secret', 'salt-b', 48)
+    expect(a).toHaveLength(48)
+    expect(Buffer.from(a).equals(Buffer.from(b))).toBe(false)
   })
 })
