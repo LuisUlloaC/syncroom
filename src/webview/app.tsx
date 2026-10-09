@@ -5,6 +5,7 @@ import type {HostToWebview, ListingView, LobbyView, ViewState, WebviewToHost} fr
 import {clock, thumbnail} from './format'
 import {dropPlacement, type DropTarget} from './queue-drop'
 import {Icon} from './icons'
+import {PreviewLink} from './preview-link'
 
 declare function acquireVsCodeApi(): {postMessage(message: WebviewToHost): void}
 
@@ -15,6 +16,8 @@ const strings = injected.__SYNCROOM_STRINGS__ ?? {}
 const viewMode: 'room' | 'chat' = injected.__SYNCROOM_VIEW__ === 'chat' ? 'chat' : 'room'
 const s = (key: string): string => strings[key] ?? key
 const post = (message: WebviewToHost): void => vscode.postMessage(message)
+/** La conexión de la vista previa vive fuera de los componentes: sobrevive a los repintados. */
+const preview = new PreviewLink(post)
 
 export function App() {
   const [state, setState] = useState<ViewState>({
@@ -24,7 +27,9 @@ export function App() {
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<HostToWebview>): void => {
-      if (event.data.t === 'state') setState(event.data.state)
+      const msg = event.data
+      if (msg.t === 'state') setState(msg.state)
+      else if (msg.t === 'rtc' || msg.t === 'previewEnd') void preview.handle(msg)
     }
     window.addEventListener('message', onMessage)
     post({t: 'ready'})
@@ -39,7 +44,13 @@ export function App() {
     )
   }
   return state.inRoom ? (
-    <Room room={state.room} playerVisible={state.playerVisible} listing={state.listing} groups={state.groups} />
+    <Room
+      room={state.room}
+      playerVisible={state.playerVisible}
+      listing={state.listing}
+      groups={state.groups}
+      videoPreview={state.videoPreview}
+    />
   ) : (
     <Lobby directory={state.directory} />
   )
@@ -145,7 +156,15 @@ function OpenRooms({directory}: {directory: LobbyView}) {
   )
 }
 
-function Room({room, playerVisible, listing, groups}: {room: RoomView; playerVisible: boolean; listing: ListingView | undefined; groups: string[]}) {
+interface RoomProps {
+  room: RoomView
+  playerVisible: boolean
+  listing: ListingView | undefined
+  groups: string[]
+  videoPreview: boolean
+}
+
+function Room({room, playerVisible, listing, groups, videoPreview}: RoomProps) {
   const current = room.tracks.find(track => track.current)
   const canPlay = room.policy?.canControlPlayback ?? true
   const canEdit = room.policy?.canEditQueue ?? true
@@ -188,11 +207,7 @@ function Room({room, playerVisible, listing, groups}: {room: RoomView; playerVis
       )}
 
       <section class="now">
-        {current === undefined ? (
-          <div class="art empty" />
-        ) : (
-          <img class="art" src={thumbnail(current.videoId)} alt="" />
-        )}
+        <Art current={current} videoPreview={videoPreview} />
         <h2>{current === undefined ? s('player.nothing') : current.title}</h2>
         <p class="by">
           {current === undefined ? s('player.hint') : current.unplayable ? s('player.unplayable') : current.author}
@@ -243,6 +258,57 @@ function Room({room, playerVisible, listing, groups}: {room: RoomView; playerVis
       <AddLink disabled={!canEdit} />
       <Queue tracks={room.tracks} policy={room.policy} />
     </main>
+  )
+}
+
+/**
+ * La imagen de la pista: el vídeo en directo del motor si llega (vista previa), si no la miniatura.
+ * El vídeo se monta oculto y solo sustituye a la miniatura con el primer fotograma.
+ */
+function Art({current, videoPreview}: {current: TrackView | undefined; videoPreview: boolean}) {
+  const [stream, setStream] = useState<MediaStream | null>(null)
+  const [live, setLive] = useState(false)
+  useEffect(() => {
+    preview.onStream = next => {
+      setStream(next)
+      setLive(false)
+    }
+    return () => {
+      preview.onStream = undefined
+    }
+  }, [])
+  const showVideo = stream !== null && videoPreview && current !== undefined
+  const showingVideo = showVideo && live
+  return (
+    <div class="art-wrap">
+      {showVideo && (
+        <video
+          class={live ? 'art' : 'art pending'}
+          autoplay
+          muted
+          playsinline
+          // Solo se asigna si cambia: la vista se repinta cada segundo.
+          ref={element => {
+            if (element !== null && element.srcObject !== stream) element.srcObject = stream
+          }}
+          onPlaying={() => setLive(true)}
+          onLoadedData={() => setLive(true)}
+        />
+      )}
+      {!showingVideo &&
+        (current === undefined ? <div class="art empty" /> : <img class="art" src={thumbnail(current.videoId)} alt="" />)}
+      {current !== undefined && (
+        <button
+          class={videoPreview ? 'icon preview-toggle on' : 'icon preview-toggle'}
+          onClick={() => post({t: 'videoPreview', on: !videoPreview})}
+          title={videoPreview ? s('player.previewOff') : s('player.previewOn')}
+          aria-label={videoPreview ? s('player.previewOff') : s('player.previewOn')}
+          aria-pressed={videoPreview}
+        >
+          <Icon name="video" />
+        </button>
+      )}
+    </div>
   )
 }
 

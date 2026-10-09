@@ -93,6 +93,8 @@
       'player.volume': 'Volume',
       'player.show': 'Show player window',
       'player.hide': 'Hide player window',
+      'player.previewOn': 'Show the video here',
+      'player.previewOff': 'Show only the thumbnail',
       'player.unplayable': 'This video is not available for you.',
       'add.placeholder': 'YouTube video or playlist link',
       'add.button': 'Add',
@@ -165,7 +167,8 @@
     }
     const state = wanted === 'lobby'
       ? {inRoom: false, directory}
-      : {inRoom: true, room, playerVisible: false, listing: {relaysOk: 3, group: 'motorflash front'}, groups: ['motorflash front']}
+      // ?preview=off: el usuario apagó el vídeo en la vista (aquí no hay motor: siempre se ve la miniatura).
+      : {inRoom: true, room, playerVisible: false, listing: {relaysOk: 3, group: 'motorflash front'}, groups: ['motorflash front'], videoPreview: params.get('preview') !== 'off'}
     // Igual que el host real: responde con el estado cuando la vista dice «ready».
     window.acquireVsCodeApi = () => ({
       postMessage: message => {

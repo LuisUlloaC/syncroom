@@ -53,6 +53,8 @@ export function webviewStrings(): Record<string, string> {
     'player.volume': t('Volume'),
     'player.show': t('Show player window'),
     'player.hide': t('Hide player window'),
+    'player.previewOn': t('Show the video here'),
+    'player.previewOff': t('Show only the thumbnail'),
     'player.unplayable': t('This video is not available for you.'),
     'add.placeholder': t('YouTube video or playlist link'),
     'add.button': t('Add'),

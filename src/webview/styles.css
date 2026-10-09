@@ -153,12 +153,26 @@ button.link:hover:not(:disabled) { background: none; color: var(--vscode-textLin
 .people .link.direct::before { background: var(--vscode-testing-iconPassed, currentColor); border-color: transparent; }
 
 .now { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.35rem; }
+.now .art-wrap { position: relative; margin-bottom: 0.35rem; }
 .now .art {
   display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
-  margin-bottom: 0.35rem; border-radius: 0.2em;
+  border-radius: 0.2em;
   border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
   background: var(--vscode-editorWidget-background);
 }
+/* cover recorta las franjas negras que deje el reproductor si la página del motor no es 16:9. */
+.now video.art { object-fit: cover; background: #000; }
+/* Montado pero invisible hasta el primer fotograma; mientras, se ve la miniatura. */
+.now video.art.pending { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.now button.preview-toggle {
+  position: absolute; top: 0.4rem; right: 0.4rem;
+  width: 1.9em; height: 1.9em; border-radius: 0.2em;
+  background: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 72%, transparent);
+  color: var(--vscode-foreground);
+}
+.now .preview-toggle:hover:not(:disabled) { background: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 90%, transparent); }
+.now .preview-toggle:not(.on) { color: var(--vscode-descriptionForeground); }
+.now .preview-toggle.on { box-shadow: inset 0 -1px 0 var(--vscode-focusBorder); }
 .now .by { color: var(--vscode-descriptionForeground); overflow-wrap: anywhere; }
 
 .scrub { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 0.1rem; margin-top: 0.3rem; }
