@@ -2,7 +2,10 @@ import {serializeCandidate, type EngineToHost, type RtcSignal} from '../protocol
 
 /** `preferCurrentTab` (Chromium) aún no está en los tipos del DOM. */
 const CAPTURE: DisplayMediaStreamOptions & {preferCurrentTab: boolean} = {
-  video: {frameRate: 15, width: 480},
+  // 30 como tope: la captura de pestaña solo saca un fotograma cuando la imagen cambia, así que
+  // nunca pasa de los fps del vídeo (25 en el de prueba). Medido el 2026-10-09: ~1,5 Mbit/s en
+  // loopback y ~0,27 núcleos entre Edge y VS Code (a 15 fps eran ~0,16).
+  video: {frameRate: 30, width: 480},
   audio: false,
   preferCurrentTab: true
 }
@@ -39,6 +42,8 @@ export class Preview {
       return
     }
     this.track = track
+    // Es vídeo, no una pantalla con texto: que el codificador priorice fluidez sobre nitidez.
+    track.contentHint = 'motion'
     const {width, height} = track.getSettings()
     this.send({t: 'log', text: `preview capture ${width ?? '?'}x${height ?? '?'} of a ${innerWidth}x${innerHeight} page`})
     this.send({t: 'preview', state: 'on', width, height})
