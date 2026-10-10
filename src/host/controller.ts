@@ -15,6 +15,7 @@ import {locateBrowser} from './engine/browser-locator'
 import {EngineProcess, buildEngineArgs, describeExit} from './engine/engine-process'
 import {cleanupLeftovers, isAlive, listProcesses} from './engine/orphans'
 import {engineProfileName, profileToken} from './engine/profile'
+import {planRestart} from './engine/restart-budget'
 import {PreviewSwitch} from './preview-switch'
 import {MAX_NAME, RoomSession} from './session'
 
@@ -23,8 +24,6 @@ const t = vscode.l10n.t
 const DEFAULT_VOLUME = 60
 /** Margen para que el «bye» salga antes de matar el motor. */
 const GOODBYE_MS = 300
-const MAX_RESTARTS = 3
-const RESTART_WINDOW_MS = 60_000
 /** Tope de la limpieza de restos al abrir sala: después se entra igual. */
 const CLEANUP_MS = 8000
 
@@ -39,7 +38,7 @@ interface ActiveRoom {
   expectedExit: boolean
   /** true mientras se está relanzando tras un fallo. */
   restarting: boolean
-  restarts: number[]
+  restarts: readonly number[]
   reportedFault: string | undefined
 }
 
@@ -47,6 +46,7 @@ interface ActiveRoom {
 export class RoomController implements vscode.Disposable {
   private active: ActiveRoom | undefined
   private busy = false
+  private disposed = false
   private readonly changed = new vscode.EventEmitter<void>()
   readonly onDidChange = this.changed.event
   private readonly output = vscode.window.createOutputChannel('SyncRoom')
@@ -210,7 +210,11 @@ export class RoomController implements vscode.Disposable {
     return fresh
   }
 
-  async leave(): Promise<void> {
+  /**
+   * Sale de la sala y para el motor. `goodbye: false` no espera a que salga el «bye»: el motor se
+   * mata en el acto (al desechar el controlador, cuando el host puede no durar ni esos 300 ms).
+   */
+  async leave(opts: {goodbye?: boolean} = {}): Promise<void> {
     const room = this.active
     if (room === undefined) return
     this.active = undefined
@@ -220,7 +224,7 @@ export class RoomController implements vscode.Disposable {
     room.expectedExit = true
     this.log('leaving the room')
     room.session.dispose()
-    await new Promise(done => setTimeout(done, GOODBYE_MS))
+    if (opts.goodbye !== false) await new Promise(done => setTimeout(done, GOODBYE_MS))
     await room.engine.stop()
     await room.bridge.close()
     // El perfil es desechable: así nunca queda un navegador «restaurando» sesiones anteriores.
@@ -268,8 +272,13 @@ export class RoomController implements vscode.Disposable {
     this.output.show(true)
   }
 
+  /**
+   * Al cerrar VS Code, deactivate() ya sale de la sala (y VS Code espera). Si aún queda una sala
+   * (el host se desecha sin deactivate), el motor se para ya: si no, Edge quedaría huérfano.
+   */
   dispose(): void {
-    void this.leave()
+    void this.leave({goodbye: false})
+    this.disposed = true
     this.discovery.dispose()
     this.configWatch.dispose()
     this.rtc.dispose()
@@ -279,6 +288,8 @@ export class RoomController implements vscode.Disposable {
   }
 
   private log(text: string): void {
+    // Tras dispose() el canal ya no existe y aún pueden llegar avisos (la salida del motor).
+    if (this.disposed) return
     this.output.appendLine(`${new Date().toISOString().slice(11, 19)} ${text}`)
   }
 
@@ -410,11 +421,10 @@ export class RoomController implements vscode.Disposable {
     if (this.active !== room || room.expectedExit || room.restarting) return
     room.restarting = true
     try {
-      const now = Date.now()
-      room.restarts = [...room.restarts.filter(at => now - at < RESTART_WINDOW_MS), now]
-      this.log(`engine trouble: restart ${room.restarts.length}/${MAX_RESTARTS}`)
-      if (room.restarts.length > MAX_RESTARTS) {
-        this.log('giving up: leaving the room')
+      const plan = planRestart(room.restarts, Date.now())
+      room.restarts = plan.history
+      this.log(plan.message)
+      if (!plan.restart) {
         void vscode.window.showErrorMessage(t('The audio engine keeps failing. Check that YouTube is reachable, then try again.'))
         await this.leave()
         return

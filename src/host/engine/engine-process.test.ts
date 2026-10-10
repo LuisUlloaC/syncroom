@@ -87,6 +87,36 @@ describe('EngineProcess', () => {
     await engine.stop()
   })
 
+  it('still stops the browser when killing the process tree fails', async () => {
+    const engine = new EngineProcess(process.execPath, {killTree: (_pid, done) => done(new Error('taskkill failed'))})
+    const onExit = vi.fn()
+    engine.onExit(onExit)
+    engine.start(IDLE)
+    await engine.stop()
+    expect(engine.running).toBe(false)
+    expect(onExit).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives up waiting after a while and lets a new browser start', async () => {
+    const stuck: number[] = []
+    const engine = new EngineProcess(process.execPath, {killTree: pid => stuck.push(pid), stopTimeoutMs: 100})
+    const onExit = vi.fn()
+    engine.onExit(onExit)
+    try {
+      engine.start(IDLE)
+      await engine.stop()
+      expect(engine.running).toBe(false)
+      engine.start(IDLE) // ya no lanza «engine already running»
+      expect(engine.running).toBe(true)
+      await engine.stop()
+    } finally {
+      for (const pid of stuck) process.kill(pid, 'SIGKILL')
+    }
+    // El que no se dejó matar ya no cuenta: su salida tardía no se anuncia como la del motor actual.
+    await new Promise(done => setTimeout(done, 200))
+    expect(onExit).not.toHaveBeenCalled()
+  })
+
   it('can be started again after stopping', async () => {
     const engine = new EngineProcess(process.execPath)
     engine.start(IDLE)
@@ -96,3 +126,4 @@ describe('EngineProcess', () => {
     await engine.stop()
   })
 })
+

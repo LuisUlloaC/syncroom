@@ -62,11 +62,28 @@ export function describeExit(exit: EngineExit): string {
   return exit.signal !== null ? `signal ${exit.signal}` : 'unknown'
 }
 
+export interface EngineProcessOptions {
+  /** Mata el proceso y sus hijos (por defecto tree-kill con SIGKILL). */
+  killTree?: (pid: number, done: (error?: Error) => void) => void
+  /** Tope de espera de stop(); después el proceso se da por perdido. */
+  stopTimeoutMs?: number
+}
+
+const STOP_TIMEOUT_MS = 5000
+
 export class EngineProcess {
   private child: ChildProcess | undefined
   private readonly listeners = new Set<(exit: EngineExit) => void>()
+  private readonly killTree: (pid: number, done: (error?: Error) => void) => void
+  private readonly stopTimeoutMs: number
 
-  constructor(private readonly command: string) {}
+  constructor(
+    private readonly command: string,
+    options: EngineProcessOptions = {}
+  ) {
+    this.killTree = options.killTree ?? ((pid, done) => treeKill(pid, 'SIGKILL', done))
+    this.stopTimeoutMs = options.stopTimeoutMs ?? STOP_TIMEOUT_MS
+  }
 
   get running(): boolean {
     return this.child !== undefined
@@ -87,15 +104,26 @@ export class EngineProcess {
     child.once('error', error => finished({code: null, signal: null, error: error.message}))
   }
 
-  /** Mata el proceso y todos sus hijos (el navegador crea varios). */
+  /**
+   * Mata el proceso y todos sus hijos (el navegador crea varios). Si matar el árbol falla, mata
+   * al menos el proceso principal; si ni así sale a tiempo, lo da por perdido (no se anuncia su
+   * salida) para que pueda arrancar otro. Nunca rechaza.
+   */
   stop(): Promise<void> {
     const child = this.child
     if (child === undefined || child.pid === undefined) return Promise.resolve()
     const pid = child.pid
     return new Promise(resolve => {
-      child.once('exit', () => resolve())
-      treeKill(pid, 'SIGKILL', error => {
-        if (error) resolve()
+      const timer = setTimeout(() => {
+        if (this.child === child) this.child = undefined
+        resolve()
+      }, this.stopTimeoutMs)
+      child.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+      this.killTree(pid, error => {
+        if (error !== undefined && error !== null) child.kill('SIGKILL')
       })
     })
   }
