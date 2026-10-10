@@ -13,6 +13,7 @@ import {needsDemotion} from './discovery/demotion'
 import {Discovery} from './discovery/service'
 import {locateBrowser} from './engine/browser-locator'
 import {EngineProcess, buildEngineArgs} from './engine/engine-process'
+import {engineProfileName, profileToken} from './engine/profile'
 import {PreviewSwitch} from './preview-switch'
 import {MAX_NAME, RoomSession} from './session'
 
@@ -28,7 +29,8 @@ interface ActiveRoom {
   session: RoomSession
   bridge: BridgeServer
   engine: EngineProcess
-  profileDir: string
+  /** Perfil del motor actual; cada lanzamiento estrena uno (undefined antes del primero). */
+  profileDir: string | undefined
   visible: boolean
   /** true mientras somos nosotros quienes cerramos el motor. */
   expectedExit: boolean
@@ -219,7 +221,7 @@ export class RoomController implements vscode.Disposable {
     await room.engine.stop()
     await room.bridge.close()
     // El perfil es desechable: así nunca queda un navegador «restaurando» sesiones anteriores.
-    await rm(room.profileDir, {recursive: true, force: true, maxRetries: 3, retryDelay: 200}).catch(() => undefined)
+    if (room.profileDir !== undefined) await removeProfile(room.profileDir)
     await retiring
     await vscode.commands.executeCommand('setContext', 'syncroom.inRoom', false)
     this.changed.fire()
@@ -236,7 +238,7 @@ export class RoomController implements vscode.Disposable {
       room.expectedExit = false
       if (this.active !== room) return
       room.visible = !room.visible
-      this.launch(room)
+      await this.launch(room)
       this.changed.fire()
     } finally {
       this.busy = false
@@ -291,9 +293,6 @@ export class RoomController implements vscode.Disposable {
     const direct = !relayOnly && config.get<boolean>('directConnections', true)
     if (relayOnly) this.log(`room ${code}: joined from Open rooms, relays only`)
 
-    // Un perfil por ventana de VS Code: Chromium solo admite un proceso por perfil.
-    const profileDir = join(this.context.globalStorageUri.fsPath, `engine-profile-${process.pid}`)
-    await mkdir(profileDir, {recursive: true})
     const bridge = await BridgeServer.start({pageDir: join(this.context.extensionPath, 'dist', 'engine')})
     const session = new RoomSession({
       code,
@@ -313,7 +312,7 @@ export class RoomController implements vscode.Disposable {
       session,
       bridge,
       engine: new EngineProcess(browser),
-      profileDir,
+      profileDir: undefined,
       visible: false,
       expectedExit: false,
       restarting: false,
@@ -346,13 +345,27 @@ export class RoomController implements vscode.Disposable {
         if (msg.state !== 'on') this.previewEnd.fire()
       } else if (msg.t === 'ready') this.syncPreview()
     })
-    this.launch(room)
+    await this.launch(room)
+    if (this.active !== room) return
     await vscode.commands.executeCommand('setContext', 'syncroom.inRoom', true)
     this.changed.fire()
   }
 
-  private launch(room: ActiveRoom): void {
-    const args = buildEngineArgs({url: room.bridge.pageUrl, profileDir: room.profileDir, visible: room.visible})
+  /**
+   * Arranca el motor con un perfil estrenado. Se llama con el motor anterior ya parado: su perfil
+   * se borra (si un Edge huérfano lo retuviera, el nuevo ni lo toca: Chromium solo admite un
+   * navegador por perfil y con el mismo perfil el nuevo saldría al instante).
+   */
+  private async launch(room: ActiveRoom): Promise<void> {
+    const previous = room.profileDir
+    const profileDir = join(this.context.globalStorageUri.fsPath, engineProfileName(process.pid, profileToken()))
+    room.profileDir = profileDir
+    if (previous !== undefined) void removeProfile(previous)
+    // Si no se puede crear, que lo intente Chromium (crea la carpeta del perfil si falta).
+    await mkdir(profileDir, {recursive: true}).catch((error: unknown) => this.log(`could not create the engine profile (${String(error)})`))
+    // Mientras se creaba la carpeta pudo salirse de la sala (y leave() ya borró este perfil).
+    if (this.active !== room || room.engine.running) return
+    const args = buildEngineArgs({url: room.bridge.pageUrl, profileDir, visible: room.visible})
     this.log(`launching engine (${room.visible ? 'window' : 'hidden'}): ${args.map(a => a.replace(/t=[0-9a-f]+/, 't=…')).join(' ')}`)
     room.engine.start(args)
     room.session.expectEngine()
@@ -384,7 +397,7 @@ export class RoomController implements vscode.Disposable {
       room.expectedExit = false
       if (this.active !== room) return
       room.visible = false
-      this.launch(room)
+      await this.launch(room)
       this.changed.fire()
     } finally {
       room.restarting = false
@@ -427,6 +440,11 @@ export class RoomController implements vscode.Disposable {
     await config.update('displayName', name, vscode.ConfigurationTarget.Global)
     return name
   }
+}
+
+/** Nunca falla: un perfil que no se deja borrar (algún proceso aún lo usa) se queda. */
+function removeProfile(dir: string): Promise<void> {
+  return rm(dir, {recursive: true, force: true, maxRetries: 3, retryDelay: 200}).catch(() => undefined)
 }
 
 function systemUserName(): string {
