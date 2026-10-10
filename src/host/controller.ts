@@ -1,6 +1,6 @@
 import {mkdir, rm} from 'node:fs/promises'
 import {userInfo} from 'node:os'
-import {join} from 'node:path'
+import {basename, join} from 'node:path'
 import * as vscode from 'vscode'
 import {generatePeerId, generateRoomCode} from '../core/ids'
 import {DEFAULT_RELAYS} from '../protocol/defaults'
@@ -13,6 +13,7 @@ import {needsDemotion} from './discovery/demotion'
 import {Discovery} from './discovery/service'
 import {locateBrowser} from './engine/browser-locator'
 import {EngineProcess, buildEngineArgs} from './engine/engine-process'
+import {cleanupLeftovers, isAlive, listProcesses} from './engine/orphans'
 import {engineProfileName, profileToken} from './engine/profile'
 import {PreviewSwitch} from './preview-switch'
 import {MAX_NAME, RoomSession} from './session'
@@ -24,6 +25,8 @@ const DEFAULT_VOLUME = 60
 const GOODBYE_MS = 300
 const MAX_RESTARTS = 3
 const RESTART_WINDOW_MS = 60_000
+/** Tope de la limpieza de restos al abrir sala: después se entra igual. */
+const CLEANUP_MS = 8000
 
 interface ActiveRoom {
   session: RoomSession
@@ -280,6 +283,8 @@ export class RoomController implements vscode.Disposable {
   }
 
   private async open(code: string, claim: boolean, relayOnly: boolean): Promise<void> {
+    // En paralelo con lo demás; el motor no arranca hasta que acabe (o pase el tope).
+    const cleanup = this.cleanupLeftovers()
     const config = vscode.workspace.getConfiguration('syncroom')
     const configured = config.get<string>('browserPath', '').trim()
     const browser = await locateBrowser({configured})
@@ -292,6 +297,7 @@ export class RoomController implements vscode.Disposable {
     if (name === undefined) return
     const direct = !relayOnly && config.get<boolean>('directConnections', true)
     if (relayOnly) this.log(`room ${code}: joined from Open rooms, relays only`)
+    await cleanup
 
     const bridge = await BridgeServer.start({pageDir: join(this.context.extensionPath, 'dist', 'engine')})
     const session = new RoomSession({
@@ -349,6 +355,27 @@ export class RoomController implements vscode.Disposable {
     if (this.active !== room) return
     await vscode.commands.executeCommand('setContext', 'syncroom.inRoom', true)
     this.changed.fire()
+  }
+
+  /**
+   * Navegadores huérfanos de motores anteriores (su host murió sin pararlos) y perfiles que nadie
+   * borró. Nunca falla ni tarda más de CLEANUP_MS: entrar en la sala no depende de esto.
+   */
+  private cleanupLeftovers(): Promise<void> {
+    const work = cleanupLeftovers({
+      root: this.context.globalStorageUri.fsPath,
+      ownPid: process.pid,
+      isAlive,
+      ignoreCase: process.platform === 'win32',
+      list: () => listProcesses(),
+      kill: pid => process.kill(pid, 'SIGKILL'),
+      // El perfil del motor que se lance mientras tanto no se toca.
+      inUse: name => this.active?.profileDir !== undefined && basename(this.active.profileDir) === name,
+      log: text => this.log(text)
+    })
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const limit = new Promise<void>(done => (timer = setTimeout(done, CLEANUP_MS)))
+    return Promise.race([work, limit]).finally(() => clearTimeout(timer))
   }
 
   /**
