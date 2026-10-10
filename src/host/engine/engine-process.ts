@@ -39,9 +39,32 @@ export function buildEngineArgs(options: EngineArgsOptions): string[] {
     : [...common, '--headless=new', '--window-size=480,400', options.url]
 }
 
+/** Cómo terminó el navegador: código, señal o el error al lanzarlo. */
+export interface EngineExit {
+  code: number | null
+  signal: NodeJS.Signals | null
+  error?: string
+}
+
+/**
+ * Códigos de salida de Chromium con explicación. 21 = otro navegador ya tiene el perfil: el nuevo
+ * le pasa la orden y sale al instante (reproducido con Edge en oculto: sale a los ~75 ms).
+ */
+const EXIT_HINTS: ReadonlyMap<number, string> = new Map([[21, 'profile in use']])
+
+/** Para el registro: «code 21: profile in use», «signal SIGKILL», «could not start: …». */
+export function describeExit(exit: EngineExit): string {
+  if (exit.error !== undefined) return `could not start: ${exit.error}`
+  if (exit.code !== null) {
+    const hint = EXIT_HINTS.get(exit.code)
+    return hint === undefined ? `code ${exit.code}` : `code ${exit.code}: ${hint}`
+  }
+  return exit.signal !== null ? `signal ${exit.signal}` : 'unknown'
+}
+
 export class EngineProcess {
   private child: ChildProcess | undefined
-  private readonly listeners = new Set<() => void>()
+  private readonly listeners = new Set<(exit: EngineExit) => void>()
 
   constructor(private readonly command: string) {}
 
@@ -55,13 +78,13 @@ export class EngineProcess {
     // ventana ni se ve ni reproduce (e2e/player-window.e2e.test.ts). El modo oculto no abre ventana.
     const child = spawn(this.command, args, {stdio: 'ignore'})
     this.child = child
-    const finished = (): void => {
+    const finished = (exit: EngineExit): void => {
       if (this.child !== child) return
       this.child = undefined
-      for (const listener of this.listeners) listener()
+      for (const listener of this.listeners) listener(exit)
     }
-    child.once('exit', finished)
-    child.once('error', finished)
+    child.once('exit', (code, signal) => finished({code, signal}))
+    child.once('error', error => finished({code: null, signal: null, error: error.message}))
   }
 
   /** Mata el proceso y todos sus hijos (el navegador crea varios). */
@@ -77,7 +100,7 @@ export class EngineProcess {
     })
   }
 
-  onExit(listener: () => void): () => void {
+  onExit(listener: (exit: EngineExit) => void): () => void {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)

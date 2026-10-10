@@ -12,7 +12,7 @@ import {BridgeServer} from './bridge-server'
 import {needsDemotion} from './discovery/demotion'
 import {Discovery} from './discovery/service'
 import {locateBrowser} from './engine/browser-locator'
-import {EngineProcess, buildEngineArgs} from './engine/engine-process'
+import {EngineProcess, buildEngineArgs, describeExit} from './engine/engine-process'
 import {cleanupLeftovers, isAlive, listProcesses} from './engine/orphans'
 import {engineProfileName, profileToken} from './engine/profile'
 import {PreviewSwitch} from './preview-switch'
@@ -336,8 +336,8 @@ export class RoomController implements vscode.Disposable {
       this.syncDiscovery()
       this.changed.fire()
     })
-    room.engine.onExit(() => {
-      this.log(`engine process exited${room.expectedExit ? ' (expected)' : ''}`)
+    room.engine.onExit(exit => {
+      this.log(`engine process exited (${describeExit(exit)})${room.expectedExit ? ' (expected)' : ''}`)
       void this.onEngineTrouble(room)
     })
     session.onEngineFailure(() => void this.onEngineTrouble(room))

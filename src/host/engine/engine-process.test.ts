@@ -1,5 +1,5 @@
 import {describe, expect, it, vi} from 'vitest'
-import {EngineProcess, buildEngineArgs} from './engine-process'
+import {EngineProcess, buildEngineArgs, describeExit} from './engine-process'
 
 const IDLE = ['-e', 'setInterval(() => {}, 1000)']
 
@@ -35,6 +35,20 @@ describe('buildEngineArgs', () => {
   })
 })
 
+describe('describeExit', () => {
+  it('explains code 21: another browser already holds the profile', () => {
+    expect(describeExit({code: 21, signal: null})).toBe('code 21: profile in use')
+  })
+
+  it('gives the plain code, the signal or the launch error otherwise', () => {
+    expect(describeExit({code: 0, signal: null})).toBe('code 0')
+    expect(describeExit({code: 1, signal: null})).toBe('code 1')
+    expect(describeExit({code: null, signal: 'SIGKILL'})).toBe('signal SIGKILL')
+    expect(describeExit({code: null, signal: null, error: 'spawn x ENOENT'})).toBe('could not start: spawn x ENOENT')
+    expect(describeExit({code: null, signal: null})).toBe('unknown')
+  })
+})
+
 describe('EngineProcess', () => {
   it('starts, reports running and stops', async () => {
     const engine = new EngineProcess(process.execPath)
@@ -45,21 +59,23 @@ describe('EngineProcess', () => {
     expect(engine.running).toBe(false)
   })
 
-  it('notifies when the process exits on its own', async () => {
+  it('notifies when the process exits on its own, with its exit code', async () => {
     const engine = new EngineProcess(process.execPath)
     const onExit = vi.fn()
     engine.onExit(onExit)
-    engine.start(['-e', 'process.exit(0)'])
+    engine.start(['-e', 'process.exit(21)'])
     await expect.poll(() => onExit.mock.calls.length, {timeout: 5000}).toBe(1)
+    expect(onExit).toHaveBeenCalledWith({code: 21, signal: null})
     expect(engine.running).toBe(false)
   })
 
-  it('notifies when the command does not exist', async () => {
+  it('notifies when the command does not exist, with the error', async () => {
     const engine = new EngineProcess('this-binary-does-not-exist-syncroom')
     const onExit = vi.fn()
     engine.onExit(onExit)
     engine.start([])
     await expect.poll(() => onExit.mock.calls.length, {timeout: 5000}).toBe(1)
+    expect(onExit).toHaveBeenCalledWith({code: null, signal: null, error: expect.stringContaining('ENOENT')})
     expect(engine.running).toBe(false)
   })
 
