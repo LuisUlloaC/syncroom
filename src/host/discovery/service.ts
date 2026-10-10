@@ -179,6 +179,9 @@ export class Discovery implements vscode.Disposable {
     }
     // Lo que se crea a partir de aquí no espera nada: si ya se cerró, no se abre la red.
     if (this.disposed) return
+    // Antes de abrir la red: si falla, los grupos guardados siguen ahí y un addGroup posterior
+    // no sobrescribe la lista guardada con solo el nuevo.
+    this.groups = groups
     try {
       const relays = vscode.workspace.getConfiguration('syncroom').get<string[]>('relays', DEFAULT_RELAYS)
       const net = createNostrNet(relays, secret)
@@ -200,7 +203,6 @@ export class Discovery implements vscode.Disposable {
       this.changed.fire()
       return
     }
-    this.groups = groups
     this.directory.setScopes(this.scopes())
     // Lo que pasó mientras cargaba: la sala ya abierta y la vista ya visible.
     this.syncRoom(this.lastRoom)

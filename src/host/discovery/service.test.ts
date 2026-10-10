@@ -84,6 +84,26 @@ describe('Discovery when VS Code fails it', () => {
     discovery.dispose()
   })
 
+  it('when the relays cannot be set up the saved groups still load, and adding one keeps them', async () => {
+    netMock.createNostrNet.mockImplementation(() => {
+      throw new Error('no WebSocket')
+    })
+    const stored = new Map<string, string>([['syncroom.groups', '["motorflash front"]']])
+    const {discovery} = setup({
+      get: key => Promise.resolve(stored.get(key)),
+      store: (key, value) => {
+        stored.set(key, value)
+        return Promise.resolve()
+      }
+    })
+    await vi.waitFor(() => expect(discovery.directoryView().status).toBe('offline'))
+    expect(discovery.groupWords()).toEqual(['motorflash front'])
+    vscodeMock.window.showInputBox.mockResolvedValue('Familia Ulloa 2026')
+    await expect(discovery.addGroup()).resolves.toBe('familia ulloa 2026')
+    expect(JSON.parse(stored.get('syncroom.groups') ?? '[]')).toEqual(['motorflash front', 'familia ulloa 2026'])
+    discovery.dispose()
+  })
+
   it('a group that cannot be saved shows an error and is not added', async () => {
     const {discovery} = setup({
       get: () => Promise.resolve(undefined),
