@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1
+
+- Fixed: joining a room could fail every time ("The audio engine keeps failing") until VS Code restarted its extensions. A hidden browser left over from an earlier session kept the engine's profile, and the new engine exited at once. Every engine launch now gets a fresh profile, and leftover engine browsers and profiles from this extension are cleaned up when a room opens (your own browser and SyncRoom in other VS Code windows are not touched).
+- Fixed: the engine browser is stopped when the extension shuts down, even if killing its child processes fails.
+- The log now says why the engine exited (for example `code 21: profile in use`) and no longer shows "restart 4/3" when it gives up.
+- Fixed: if the open-rooms network could not start, saved group words were not loaded, and adding a group then replaced the saved list.
+
 ## 0.7.0
 
 - The SyncRoom view now shows the video of the current track (captured from the hidden player on your computer; nothing is sent to the room). Turn it off with the button on the picture or the `syncroom.videoPreview` setting. Ads that play in the hidden player are visible in the preview.
