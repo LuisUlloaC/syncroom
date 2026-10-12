@@ -461,7 +461,7 @@ function AddBox({disabled}: {disabled: boolean}) {
             }
           }}
         />
-        <button type="submit" disabled={intent.kind === 'empty' || disabled || search.status === 'searching'}>
+        <button type="submit" disabled={intent.kind === 'empty' || disabled || (intent.kind === 'search' && search.status === 'searching')}>
           {intent.kind === 'search' ? s('add.search') : s('add.button')}
         </button>
       </form>
