@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0
+
+- Search YouTube from the SyncRoom view: type anything that is not a link in the box under the player and press Enter. Up to 10 videos show with thumbnail, channel and length (live streams are marked LIVE); add one to the queue or play it next. Pasting a link works as before.
+- Search uses the same internal YouTube endpoint as the YouTube website (no account, no API key). If YouTube changes it, the view says search is not available and links keep working.
+
 ## 0.7.1
 
 - Fixed: joining a room could fail every time ("The audio engine keeps failing") until VS Code restarted its extensions. A hidden browser left over from an earlier session kept the engine's profile, and the new engine exited at once. Every engine launch now gets a fresh profile, and leftover engine browsers and profiles from this extension are cleaned up when a room opens (your own browser and SyncRoom in other VS Code windows are not touched).
