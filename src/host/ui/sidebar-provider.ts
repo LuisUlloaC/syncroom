@@ -114,7 +114,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         await this.actions.leave()
         break
       case 'add':
-        await this.actions.addLink(msg.url)
+        if (typeof msg.url === 'string') await this.actions.addLink(msg.url, {next: msg.next === true})
+        break
+      case 'search':
+        if (typeof msg.query === 'string' && typeof msg.id === 'number') {
+          const reply = await this.actions.search(msg.query)
+          const message: HostToWebview = {t: 'searchResults', id: msg.id, ...reply}
+          void this.view?.webview.postMessage(message)
+        }
         break
       case 'toggle':
         this.actions.togglePlay()

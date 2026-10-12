@@ -149,6 +149,33 @@ describe('queue and playback', () => {
     expect(commands(sent)).toEqual([{type: 'load', videoId: 'aaaaaaaaaaa', startS: 0, playing: true}])
   })
 
+  it('adding with next puts the new track right after the current one', async () => {
+    const metas = [FIRST, SECOND, {videoId: 'ccccccccccc', title: 'Third', author: 'C'}]
+    let call = 0
+    const {link, session} = setup({resolve: async () => ({metas: [metas[call++] ?? FIRST], truncated: false, startIndex: 0})})
+    link.emit({t: 'ready'})
+    await session.addLink('first')
+    await session.addLink('second')
+    link.take()
+    expect(await session.addLink('third', {next: true})).toEqual({added: 1, truncated: false})
+    expect(session.view().tracks.map(track => track.title)).toEqual(['First', 'Third', 'Second'])
+    expect(sends(link.take())).toEqual([
+      ['add', true],
+      ['move', true]
+    ])
+  })
+
+  it('adding with next to an empty room just plays it', async () => {
+    const {link, session} = setup()
+    link.emit({t: 'ready'})
+    link.take()
+    expect(await session.addLink('x', {next: true})).toEqual({added: 1, truncated: false})
+    expect(sends(link.take())).toEqual([
+      ['add', true],
+      ['playback', true]
+    ])
+  })
+
   it('a resolver failure adds nothing and reaches the caller', async () => {
     const {link, session} = setup({
       resolve: async () => {

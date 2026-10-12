@@ -1,6 +1,7 @@
 import type {Listed} from '../core/types'
 import type {DirectoryView} from '../host/discovery/directory'
 import type {RoomView} from '../host/session'
+import type {SearchResult} from '../resolve/search'
 import type {RtcSignal} from './bridge'
 
 /** La lista del lobby y tus grupos (palabras guardadas en este equipo). */
@@ -24,6 +25,8 @@ export type HostToWebview =
   | {t: 'rtc'; signal: RtcSignal}
   /** El motor dejó de capturar: volver a la miniatura. */
   | {t: 'previewEnd'}
+  /** Respuesta a `search` con el mismo `id`; `error` ya va traducido. */
+  | {t: 'searchResults'; id: number; results: SearchResult[]; error: string | null}
 
 /** De la vista lateral al extension host. */
 export type WebviewToHost =
@@ -32,7 +35,10 @@ export type WebviewToHost =
   /** `fromList`: elegida en «Salas abiertas» (se entra solo por relays: el dueño es un desconocido). */
   | {t: 'join'; code: string; fromList?: boolean}
   | {t: 'leave'}
-  | {t: 'add'; url: string}
+  /** `next`: que suene justo después de la pista actual. */
+  | {t: 'add'; url: string; next?: boolean}
+  /** Buscar vídeos en YouTube; el `id` empareja la respuesta y descarta las viejas. */
+  | {t: 'search'; id: number; query: string}
   | {t: 'toggle'}
   | {t: 'next'}
   | {t: 'playNow'; trackId: string}

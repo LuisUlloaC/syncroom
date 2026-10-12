@@ -225,11 +225,14 @@ export class RoomSession {
 
   // ── Acciones del usuario ─────────────────────────────────────────────────
 
-  async addLink(input: string): Promise<{added: number; truncated: boolean}> {
+  /** `next`: lo añadido pasa a sonar justo después de la pista actual, en el mismo orden. */
+  async addLink(input: string, opts: {next?: boolean} = {}): Promise<{added: number; truncated: boolean}> {
     const resolved = await this.opts.resolve(input)
-    const before = this.state.queue().length
+    const before = new Set(this.state.queue().map(track => track.id))
     this.sendAll(this.state.addTracks(resolved.metas, resolved.startIndex))
-    return {added: this.state.queue().length - before, truncated: resolved.truncated}
+    const added = this.state.queue().filter(track => !before.has(track.id))
+    if (opts.next === true) for (const track of added.toReversed()) this.sendAll(this.state.playNext(track.id))
+    return {added: added.length, truncated: resolved.truncated}
   }
 
   togglePlay(): void {

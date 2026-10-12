@@ -2,6 +2,7 @@ import * as vscode from 'vscode'
 import {formatRoomCode, normalizeRoomCode} from '../core/ids'
 import type {Listed} from '../core/types'
 import type {RtcSignal} from '../protocol/bridge'
+import {searchVideos, type SearchResult} from '../resolve/search'
 import {ResolveError} from '../resolve/youtube'
 import type {RoomController} from './controller'
 
@@ -54,7 +55,8 @@ export class Actions {
     await this.controller.leave()
   }
 
-  async addLink(url?: string): Promise<void> {
+  /** `next`: lo añadido suena justo después de la pista actual. */
+  async addLink(url?: string, opts: {next?: boolean} = {}): Promise<void> {
     const session = this.controller.session
     if (session === undefined) {
       void vscode.window.showWarningMessage(t('Join or create a room first.'))
@@ -63,7 +65,7 @@ export class Actions {
     const input = url ?? (await vscode.window.showInputBox({title: t('YouTube video or playlist link')}))
     if (input === undefined || input.trim() === '') return
     try {
-      const result = await session.addLink(input)
+      const result = await session.addLink(input, opts)
       if (result.added === 0) void vscode.window.showWarningMessage(t('The queue is full.'))
       else if (result.truncated) {
         void vscode.window.showInformationMessage(
@@ -72,6 +74,15 @@ export class Actions {
       }
     } catch (error) {
       void vscode.window.showWarningMessage(resolveErrorText(error))
+    }
+  }
+
+  /** Para la caja de la vista: el error vuelve traducido en vez de salir como aviso. */
+  async search(query: string): Promise<{results: SearchResult[]; error: string | null}> {
+    try {
+      return {results: await searchVideos(query), error: null}
+    } catch (error) {
+      return {results: [], error: resolveErrorText(error)}
     }
   }
 
