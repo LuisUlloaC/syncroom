@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.0
+
+- Error messages have a **Report bug** button, and there is a new command **SyncRoom: Report a Bug…**. It opens a new GitHub issue already filled in with the SyncRoom, VS Code and system versions and the end of the log, so there is no need to copy the log by hand. Your user name is removed from paths and room codes are hidden; you see the issue before sending it (a GitHub account is needed).
+
 ## 0.8.2
 
 - Fixed: on some computers joining a room still failed with "giving up after 3 restarts" (engine exited with code 0). The browser relaunches itself in a new process and the one SyncRoom started exits at once; SyncRoom took that for a crash. It now waits for the relaunched browser's page and stops that browser when you leave.
