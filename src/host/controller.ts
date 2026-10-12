@@ -1,5 +1,5 @@
 import {mkdir, rm} from 'node:fs/promises'
-import {userInfo} from 'node:os'
+import {homedir, release, userInfo} from 'node:os'
 import {basename, join} from 'node:path'
 import * as vscode from 'vscode'
 import {generatePeerId, generateRoomCode} from '../core/ids'
@@ -9,6 +9,7 @@ import type {RtcSignal} from '../protocol/bridge'
 import type {ViewState} from '../protocol/webview'
 import {resolveLink} from '../resolve/youtube'
 import {BridgeServer} from './bridge-server'
+import {LOG_LINES, issueUrl, redactLine} from './bug-report'
 import {needsDemotion} from './discovery/demotion'
 import {Discovery} from './discovery/service'
 import {locateBrowser} from './engine/browser-locator'
@@ -53,6 +54,8 @@ export class RoomController implements vscode.Disposable {
   private readonly changed = new vscode.EventEmitter<void>()
   readonly onDidChange = this.changed.event
   private readonly output = vscode.window.createOutputChannel('SyncRoom')
+  /** Final del registro, para adjuntarlo al informar de un error (el canal no se puede leer). */
+  private readonly recent: string[] = []
 
   private readonly discovery: Discovery
 
@@ -293,7 +296,50 @@ export class RoomController implements vscode.Disposable {
   private log(text: string): void {
     // Tras dispose() el canal ya no existe y aún pueden llegar avisos (la salida del motor).
     if (this.disposed) return
-    this.output.appendLine(`${new Date().toISOString().slice(11, 19)} ${text}`)
+    const line = `${new Date().toISOString().slice(11, 19)} ${text}`
+    this.output.appendLine(line)
+    this.recent.push(line)
+    if (this.recent.length > LOG_LINES) this.recent.splice(0, this.recent.length - LOG_LINES)
+  }
+
+  /**
+   * Abre en el navegador un issue nuevo de GitHub con el entorno y el final del registro (sin el
+   * usuario de las rutas ni códigos de sala). El usuario lo revisa y lo envía él.
+   */
+  async reportBug(title = 'Something went wrong'): Promise<void> {
+    const pkg = this.context.extension.packageJSON as {version?: unknown; bugs?: {url?: unknown}}
+    const issues = typeof pkg.bugs?.url === 'string' ? pkg.bugs.url : 'https://github.com/LuisUlloaC/syncroom/issues'
+    const home = homedir()
+    const url = issueUrl({
+      newIssueUrl: `${issues}/new`,
+      title,
+      environment: [
+        ['SyncRoom', typeof pkg.version === 'string' ? pkg.version : '?'],
+        ['VS Code', `${vscode.version} (${vscode.env.appName})`],
+        ['OS', `${process.platform} ${release()} ${process.arch}`],
+        ['Remote', vscode.env.remoteName ?? 'none']
+      ],
+      log: this.recent.map(line => redactLine(line, home))
+    })
+    this.log('opening a bug report on GitHub')
+    await vscode.env.openExternal(vscode.Uri.parse(url))
+  }
+
+  /** Aviso de fallo con el botón «Report bug» además de los propios; devuelve el elegido. */
+  private async notifyFailure(
+    level: 'error' | 'warning',
+    message: string,
+    issueTitle: string,
+    ...actions: string[]
+  ): Promise<string | undefined> {
+    const report = t('Report bug')
+    const choice =
+      level === 'error'
+        ? await vscode.window.showErrorMessage(message, ...actions, report)
+        : await vscode.window.showWarningMessage(message, ...actions, report)
+    if (choice !== report) return choice
+    await this.reportBug(issueTitle)
+    return undefined
   }
 
   private async open(code: string, claim: boolean, relayOnly: boolean): Promise<void> {
@@ -348,7 +394,11 @@ export class RoomController implements vscode.Disposable {
       if (fault !== undefined && fault !== room.reportedFault) {
         room.reportedFault = fault
         this.log(`fault reported: ${fault}`)
-        void vscode.window.showWarningMessage(t('SyncRoom could not load the YouTube player. Check that youtube.com is reachable from this computer, then run "SyncRoom: Show Log".'))
+        void this.notifyFailure(
+          'warning',
+          t('SyncRoom could not load the YouTube player. Check that youtube.com is reachable from this computer, then run "SyncRoom: Show Log".'),
+          `The YouTube player could not be loaded (${fault})`
+        )
       }
       this.syncDiscovery()
       this.changed.fire()
@@ -451,7 +501,11 @@ export class RoomController implements vscode.Disposable {
       room.restarts = plan.history
       this.log(plan.message)
       if (!plan.restart) {
-        void vscode.window.showErrorMessage(t('The audio engine keeps failing. Check that YouTube is reachable, then try again.'))
+        void this.notifyFailure(
+          'error',
+          t('The audio engine keeps failing. Check that YouTube is reachable, then try again.'),
+          'The audio engine keeps failing'
+        )
         await this.leave()
         return
       }
@@ -472,7 +526,7 @@ export class RoomController implements vscode.Disposable {
     const message = wasConfigured
       ? t('The browser set in "syncroom.browserPath" was not found.')
       : t('SyncRoom needs Microsoft Edge, Google Chrome, Brave or Chromium to play audio, and none was found.')
-    const choice = await vscode.window.showErrorMessage(message, openSettings)
+    const choice = await this.notifyFailure('error', message, wasConfigured ? 'The configured browser was not found' : 'No supported browser was found', openSettings)
     if (choice === openSettings) {
       await vscode.commands.executeCommand('workbench.action.openSettings', 'syncroom.browserPath')
     }

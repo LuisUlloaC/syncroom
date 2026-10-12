@@ -172,6 +172,10 @@ export class Actions {
     this.controller.showLog()
   }
 
+  async reportBug(): Promise<void> {
+    await this.controller.reportBug()
+  }
+
   async copyCode(): Promise<void> {
     const state = this.controller.viewState()
     if (!state.inRoom) return
@@ -192,7 +196,8 @@ export function registerCommands(actions: Actions): vscode.Disposable[] {
     'syncroom.togglePlayer': () => actions.togglePlayer(),
     'syncroom.copyCode': () => actions.copyCode(),
     'syncroom.changeName': () => actions.changeName(),
-    'syncroom.showLog': () => actions.showLog()
+    'syncroom.showLog': () => actions.showLog(),
+    'syncroom.reportBug': () => actions.reportBug()
   }
   return Object.entries(handlers).map(([command, handler]) => vscode.commands.registerCommand(command, handler))
 }

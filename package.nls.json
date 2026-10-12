@@ -10,6 +10,7 @@
   "command.copyCode": "Copy Room Code",
   "command.changeName": "Change Name…",
   "command.showLog": "Show Log",
+  "command.reportBug": "Report a Bug…",
   "view.name": "Room",
   "view.chat": "Chat",
   "config.displayName": "Name shown to the other people in a room. If empty, SyncRoom asks the first time.",

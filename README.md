@@ -36,6 +36,7 @@ There is no account and no SyncRoom server. Rooms exist only while someone is in
 | SyncRoom: Copy Room Code | Copy the code to share it |
 | SyncRoom: Change Name… | Change the name the others see |
 | SyncRoom: Leave Room | Stop listening |
+| SyncRoom: Report a Bug… | Open a new GitHub issue with your versions and the end of the log (your user name and room codes are removed). You see it before sending it. Error messages have a **Report bug** button that does the same. |
 
 ## Settings
 

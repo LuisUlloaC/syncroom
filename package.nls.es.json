@@ -10,6 +10,7 @@
   "command.copyCode": "Copiar código de sala",
   "command.changeName": "Cambiar nombre…",
   "command.showLog": "Mostrar registro",
+  "command.reportBug": "Informar de un error…",
   "view.name": "Sala",
   "view.chat": "Chat",
   "config.displayName": "Nombre que ven las demás personas de la sala. Si está vacío, SyncRoom lo pregunta la primera vez.",
