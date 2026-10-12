@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1
+
+- Fixed: with VS Code running as administrator, joining a room failed every time ("giving up after 3 restarts", engine exited with code 0). Edge relaunched itself without administrator rights, outside SyncRoom's control, and the engine was taken for dead; the relaunched browsers were left behind. The engine browser now stays in SyncRoom's control.
+
 ## 0.8.0
 
 - Search YouTube from the SyncRoom view: type anything that is not a link in the box under the player and press Enter. Up to 10 videos show with thumbnail, channel and length (live streams are marked LIVE); add one to the queue or play it next. Pasting a link works as before.
