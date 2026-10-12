@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.2
+
+- Fixed: on some computers joining a room still failed with "giving up after 3 restarts" (engine exited with code 0). The browser relaunches itself in a new process and the one SyncRoom started exits at once; SyncRoom took that for a crash. It now waits for the relaunched browser's page and stops that browser when you leave.
+- The log now says whether VS Code runs as administrator and, when the browser relaunches itself, which program started it.
+
 ## 0.8.1
 
 - Fixed: with VS Code running as administrator, joining a room failed every time ("giving up after 3 restarts", engine exited with code 0). Edge relaunched itself without administrator rights, outside SyncRoom's control, and the engine was taken for dead; the relaunched browsers were left behind. The engine browser now stays in SyncRoom's control.
