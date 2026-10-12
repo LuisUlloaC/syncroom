@@ -28,7 +28,12 @@ export function buildEngineArgs(options: EngineArgsOptions): string[] {
     '--autoplay-policy=no-user-gesture-required',
     // Vista previa: getDisplayMedia elige sin preguntar la pestaña titulada «SyncRoom» (el <title>
     // de src/engine-page/index.html; si cambia uno, cambia el otro). Probado en oculto el 2026-10-09.
-    '--auto-select-tab-capture-source-by-title=SyncRoom'
+    '--auto-select-tab-capture-source-by-title=SyncRoom',
+    // Con VS Code abierto como administrador, Edge se niega a correr elevado: se relanza como
+    // usuario normal (fuera de nuestro árbol) y el proceso lanzado sale con código 0. El motor
+    // se daba por muerto y los relanzados quedaban huérfanos. Medido el 2026-10-12 con Edge 155
+    // elevado: sin esto sale con 0 a los pocos ms; con esto sigue vivo. Sin elevar no cambia nada.
+    '--do-not-de-elevate'
   ]
   // El reproductor ocupa toda la página, así que la captura tiene la forma de la página. El Edge
   // oculto resta ~92 px de alto a la ventana (medido el 2026-10-09: 480×270 → página 492×178,

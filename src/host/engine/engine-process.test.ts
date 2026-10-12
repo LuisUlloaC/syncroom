@@ -13,6 +13,7 @@ describe('buildEngineArgs', () => {
       '--no-default-browser-check',
       '--autoplay-policy=no-user-gesture-required',
       '--auto-select-tab-capture-source-by-title=SyncRoom',
+      '--do-not-de-elevate',
       '--headless=new',
       '--window-size=480,400',
       'http://127.0.0.1:5000/?t=abc'
@@ -26,6 +27,7 @@ describe('buildEngineArgs', () => {
       '--no-default-browser-check',
       '--autoplay-policy=no-user-gesture-required',
       '--auto-select-tab-capture-source-by-title=SyncRoom',
+      '--do-not-de-elevate',
       '--app=http://127.0.0.1:5000/?t=abc',
       '--window-size=420,320',
       '--disable-features=CalculateNativeWinOcclusion',
