@@ -23,6 +23,7 @@ export interface TestPeer {
   profileDir: string
   /** El canal con la página del motor, para mandar y escuchar mensajes crudos. */
   bridge: BridgeServer
+  engine: EngineProcess
   /** Órdenes enviadas al reproductor (load/play/pause/seek/stop) desde el arranque. */
   playerCommands: () => number
   stop(): Promise<void>
@@ -41,6 +42,8 @@ export interface PeerOptions {
   videos?: VideoMeta[]
   /** true = crea la sala y se hace dueño. */
   claim?: boolean
+  /** true = el navegador se lanza a través de un proceso que lo suelta y sale con 0 (traspaso). */
+  handoff?: boolean
 }
 
 export async function startPeer(options: PeerOptions): Promise<TestPeer> {
@@ -48,7 +51,7 @@ export async function startPeer(options: PeerOptions): Promise<TestPeer> {
   if (browser === undefined) throw new Error('e2e needs Edge, Chrome, Brave or Chromium installed')
   const profileDir = await mkdtemp(join(tmpdir(), 'syncroom-e2e-'))
   const bridge = await BridgeServer.start({pageDir: resolve('dist/engine')})
-  const engine = new EngineProcess(browser)
+  const engine = options.handoff === true ? new EngineProcess(process.execPath) : new EngineProcess(browser)
   let playerCommands = 0
   const originalSend = bridge.send.bind(bridge)
   bridge.send = msg => {
@@ -68,13 +71,19 @@ export async function startPeer(options: PeerOptions): Promise<TestPeer> {
     resolve: async () => ({metas: options.videos ?? [VIDEO], truncated: false, startIndex: 0})
   })
   session.start()
+  // Como el controlador: con la página ya hablando, una salida del proceso es una salida de verdad.
+  bridge.onMessage(msg => {
+    if (msg.t === 'ready') engine.markReady()
+  })
   const visible = options.visible ?? process.env.SYNCROOM_E2E_VISIBLE === '1'
-  engine.start([...buildEngineArgs({url: bridge.pageUrl, profileDir, visible}), ...(options.extraArgs ?? [])])
+  const args = [...buildEngineArgs({url: bridge.pageUrl, profileDir, visible}), ...(options.extraArgs ?? [])]
+  engine.start(options.handoff === true ? [resolve('e2e/handoff-launcher.mjs'), browser, ...args] : args, {profileDir})
 
   return {
     session,
     profileDir,
     bridge,
+    engine,
     playerCommands: () => playerCommands,
     async stop() {
       session.dispose()

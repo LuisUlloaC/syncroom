@@ -12,8 +12,9 @@ import {BridgeServer} from './bridge-server'
 import {needsDemotion} from './discovery/demotion'
 import {Discovery} from './discovery/service'
 import {locateBrowser} from './engine/browser-locator'
-import {EngineProcess, buildEngineArgs, describeExit} from './engine/engine-process'
-import {cleanupLeftovers, isAlive, listProcesses} from './engine/orphans'
+import {isElevated} from './engine/elevation'
+import {EngineProcess, buildEngineArgs, describeExit, profileHolders} from './engine/engine-process'
+import {cleanupLeftovers, describeHolders, isAlive, listProcesses} from './engine/orphans'
 import {engineProfileName, profileToken} from './engine/profile'
 import {planRestart} from './engine/restart-budget'
 import {PreviewSwitch} from './preview-switch'
@@ -26,6 +27,8 @@ const DEFAULT_VOLUME = 60
 const GOODBYE_MS = 300
 /** Tope de la limpieza de restos al abrir sala: después se entra igual. */
 const CLEANUP_MS = 8000
+/** Tras un traspaso, espera antes de mirar quién tiene el perfil (el relanzado tarda en abrir). */
+const HOLDERS_DELAY_MS = 3000
 
 interface ActiveRoom {
   session: RoomSession
@@ -296,10 +299,13 @@ export class RoomController implements vscode.Disposable {
   private async open(code: string, claim: boolean, relayOnly: boolean): Promise<void> {
     // En paralelo con lo demás; el motor no arranca hasta que acabe (o pase el tope).
     const cleanup = this.cleanupLeftovers()
+    const elevated = isElevated()
     const config = vscode.workspace.getConfiguration('syncroom')
     const configured = config.get<string>('browserPath', '').trim()
     const browser = await locateBrowser({configured})
     this.log(`room ${code}: browser ${browser ?? 'NOT FOUND'}${configured !== '' ? ' (configured)' : ''}`)
+    const admin = await elevated
+    if (admin !== undefined) this.log(`VS Code running as administrator: ${admin ? 'yes' : 'no'}`)
     if (browser === undefined) {
       await this.reportMissingBrowser(configured !== '')
       return
@@ -347,6 +353,10 @@ export class RoomController implements vscode.Disposable {
       this.syncDiscovery()
       this.changed.fire()
     })
+    room.engine.onHandoff(() => {
+      this.log('engine process exited (code 0) before the page connected: the browser relaunched itself; waiting for the page')
+      void this.logHolders(room)
+    })
     room.engine.onExit(exit => {
       this.log(`engine process exited (${describeExit(exit)})${room.expectedExit ? ' (expected)' : ''}`)
       void this.onEngineTrouble(room)
@@ -360,7 +370,10 @@ export class RoomController implements vscode.Disposable {
       else if (msg.t === 'preview') {
         this.log(`preview ${msg.state}${msg.width !== undefined ? ` ${msg.width}x${msg.height ?? '?'}` : ''}`)
         if (msg.state !== 'on') this.previewEnd.fire()
-      } else if (msg.t === 'ready') this.syncPreview()
+      } else if (msg.t === 'ready') {
+        room.engine.markReady()
+        this.syncPreview()
+      }
     })
     await this.launch(room)
     if (this.active !== room) return
@@ -405,11 +418,24 @@ export class RoomController implements vscode.Disposable {
     if (this.active !== room || room.engine.running) return
     const args = buildEngineArgs({url: room.bridge.pageUrl, profileDir, visible: room.visible})
     this.log(`launching engine (${room.visible ? 'window' : 'hidden'}): ${args.map(a => a.replace(/t=[0-9a-f]+/, 't=…')).join(' ')}`)
-    room.engine.start(args)
+    room.engine.start(args, {profileDir})
     room.session.expectEngine()
     // Motor nuevo = página nueva sin captura: se empieza de cero y la vista vuelve a la miniatura.
     this.previewSwitch.reset()
     this.previewEnd.fire()
+  }
+
+  /** Tras un traspaso: quién se quedó con el perfil (para saber quién relanzó el navegador). */
+  private async logHolders(room: ActiveRoom): Promise<void> {
+    const profileDir = room.engine.profile
+    if (profileDir === undefined) return
+    await new Promise(done => setTimeout(done, HOLDERS_DELAY_MS))
+    if (this.active !== room || room.engine.profile !== profileDir) return
+    try {
+      this.log(describeHolders(await profileHolders(profileDir)))
+    } catch (error) {
+      this.log(`could not list the engine processes (${error instanceof Error ? error.message : String(error)})`)
+    }
   }
 
   /**

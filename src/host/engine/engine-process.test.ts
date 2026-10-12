@@ -119,6 +119,80 @@ describe('EngineProcess', () => {
     expect(onExit).not.toHaveBeenCalled()
   })
 
+  it('a code 0 exit before the page is ready is a hand-off: keeps running and does not report an exit', async () => {
+    const engine = new EngineProcess(process.execPath, {findHolders: async () => []})
+    const onExit = vi.fn()
+    const onHandoff = vi.fn()
+    engine.onExit(onExit)
+    engine.onHandoff(onHandoff)
+    engine.start(['-e', 'process.exit(0)'], {profileDir: 'C:\data\engine-profile-1-aa'})
+    await expect.poll(() => onHandoff.mock.calls.length, {timeout: 5000}).toBe(1)
+    expect(onExit).not.toHaveBeenCalled()
+    expect(engine.running).toBe(true)
+    expect(() => engine.start(IDLE)).toThrow()
+    await engine.stop()
+    expect(engine.running).toBe(false)
+  })
+
+  it('stopping after a hand-off kills the processes that hold the profile', async () => {
+    const killed: number[] = []
+    const asked: string[] = []
+    const engine = new EngineProcess(process.execPath, {
+      findHolders: async dir => {
+        asked.push(dir)
+        return [{pid: 101, command: 'a'}, {pid: 102, command: 'b'}]
+      },
+      killPid: pid => {
+        killed.push(pid)
+        if (pid === 101) throw new Error('already gone')
+      }
+    })
+    const onHandoff = vi.fn()
+    engine.onHandoff(onHandoff)
+    engine.start(['-e', 'process.exit(0)'], {profileDir: 'C:\data\engine-profile-1-bb'})
+    await expect.poll(() => onHandoff.mock.calls.length, {timeout: 5000}).toBe(1)
+    await engine.stop()
+    expect(asked).toEqual(['C:\data\engine-profile-1-bb'])
+    expect(killed).toEqual([101, 102])
+    expect(engine.running).toBe(false)
+  })
+
+  it('still stops after a hand-off when the processes cannot be listed', async () => {
+    const engine = new EngineProcess(process.execPath, {
+      findHolders: async () => {
+        throw new Error('powershell timed out')
+      }
+    })
+    const onHandoff = vi.fn()
+    engine.onHandoff(onHandoff)
+    engine.start(['-e', 'process.exit(0)'], {profileDir: 'C:\data\engine-profile-1-cc'})
+    await expect.poll(() => onHandoff.mock.calls.length, {timeout: 5000}).toBe(1)
+    await engine.stop()
+    expect(engine.running).toBe(false)
+  })
+
+  it('once the page is ready, a code 0 exit is a real exit (the user closed the window)', async () => {
+    const engine = new EngineProcess(process.execPath, {findHolders: async () => []})
+    const onExit = vi.fn()
+    const onHandoff = vi.fn()
+    engine.onExit(onExit)
+    engine.onHandoff(onHandoff)
+    engine.start(['-e', 'setTimeout(() => process.exit(0), 300)'], {profileDir: 'C:\data\engine-profile-1-dd'})
+    engine.markReady()
+    await expect.poll(() => onExit.mock.calls.length, {timeout: 5000}).toBe(1)
+    expect(onHandoff).not.toHaveBeenCalled()
+    expect(engine.running).toBe(false)
+  })
+
+  it('without a profile, a code 0 exit is a real exit', async () => {
+    const engine = new EngineProcess(process.execPath)
+    const onExit = vi.fn()
+    engine.onExit(onExit)
+    engine.start(['-e', 'process.exit(0)'])
+    await expect.poll(() => onExit.mock.calls.length, {timeout: 5000}).toBe(1)
+    expect(engine.running).toBe(false)
+  })
+
   it('can be started again after stopping', async () => {
     const engine = new EngineProcess(process.execPath)
     engine.start(IDLE)

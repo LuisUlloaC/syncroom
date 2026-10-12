@@ -5,6 +5,8 @@ import {join} from 'node:path'
 import {afterEach, describe, expect, it} from 'vitest'
 import {
   cleanupLeftovers,
+  describeHolders,
+  findHolders,
   findOrphans,
   isAlive,
   listProcesses,
@@ -54,6 +56,36 @@ describe('parsePsProcesses', () => {
 
   it('skips lines without a pid', () => {
     expect(parsePsProcesses('garbage\n  \n')).toEqual([])
+  })
+})
+
+describe('findHolders', () => {
+  const dir = join(ROOT, 'engine-profile-33864-0a1b2c3d')
+  const proc = (pid: number, command: string, parent?: {pid: number; name: string}): ProcessInfo =>
+    parent === undefined ? {pid, command} : {pid, command, parentPid: parent.pid, parentName: parent.name}
+
+  it('finds every process of the browser that uses exactly this profile, quoted or not', () => {
+    const processes = [
+      proc(1, `"${edge}" --user-data-dir=${dir} --headless=new http://localhost:1/`),
+      proc(2, `"${edge}" --type=renderer --user-data-dir="${dir}" --lang=es`),
+      proc(3, `"${edge}" --type=gpu-process "--user-data-dir=${dir.toLowerCase()}"`),
+      proc(4, `"${edge}" --user-data-dir=${dir}-other`),
+      proc(5, `"${edge}" --user-data-dir=${dir}0`),
+      proc(6, `"${edge}" --user-data-dir=${join(ROOT, 'engine-profile-1-ffffffff')}`)
+    ]
+    expect(findHolders(processes, dir, true).map(p => p.pid)).toEqual([1, 2, 3])
+    expect(findHolders(processes, dir, false).map(p => p.pid)).toEqual([1, 2])
+  })
+
+  it('describes who started the browser that took over the profile', () => {
+    const holders = [
+      proc(20, `"${edge}" --type=renderer --user-data-dir=${dir}`, {pid: 10, name: 'msedge'}),
+      proc(10, `"${edge}" --user-data-dir=${dir} --headless=new`, {pid: 4321, name: 'explorer'}),
+      proc(21, `"${edge}" --type=gpu-process --user-data-dir=${dir}`, {pid: 10, name: 'msedge'})
+    ]
+    expect(describeHolders(holders)).toBe('3 processes hold the engine profile; browser 10 started by explorer (4321)')
+    expect(describeHolders([proc(10, `"${edge}" --user-data-dir=${dir}`)])).toBe('1 process holds the engine profile; browser 10 started by unknown')
+    expect(describeHolders([])).toBe('no process holds the engine profile')
   })
 })
 

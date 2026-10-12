@@ -1,5 +1,6 @@
 import {describe, expect, it} from 'vitest'
 import {generateRoomCode} from '../src/core/ids'
+import {profileHolders} from '../src/host/engine/engine-process'
 import {startPeer, waitFor} from './helpers'
 
 describe('engine', () => {
@@ -37,6 +38,25 @@ describe('engine', () => {
       await waitFor('music video playing', () => status()?.state === 'playing' && (status()?.timeS ?? 0) > 1)
     } finally {
       await peer.stop()
+    }
+  })
+
+  // Un usuario: el Edge lanzado salía con 0 en milisegundos y otro Edge seguía con nuestro perfil.
+  it('follows a browser that relaunched itself, and stops it by its profile', async () => {
+    const peer = await startPeer({code: generateRoomCode(), name: 'Solo', direct: false, handoff: true})
+    const status = () => peer.session.playerStatus()
+    let stopped = false
+    try {
+      await waitFor('engine ready after the hand-off', () => peer.session.view().engineReady)
+      expect(peer.engine.running).toBe(true)
+      expect((await profileHolders(peer.profileDir)).length).toBeGreaterThan(0)
+      await peer.session.addLink('ignored: the helper resolves a fixed video')
+      await waitFor('video playing', () => status()?.state === 'playing' && (status()?.timeS ?? 0) > 1)
+      await peer.stop()
+      stopped = true
+      expect(await profileHolders(peer.profileDir)).toEqual([])
+    } finally {
+      if (!stopped) await peer.stop()
     }
   })
 })

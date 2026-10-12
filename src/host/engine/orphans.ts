@@ -17,6 +17,9 @@ import {PROFILE_PREFIX, profileHostPid} from './profile'
 export interface ProcessInfo {
   pid: number
   command: string
+  /** Solo en Windows: quién lo lanzó (para saber quién relanzó el navegador). */
+  parentPid?: number
+  parentName?: string
 }
 
 export interface Ownership {
@@ -50,7 +53,14 @@ export function parseWindowsProcesses(json: string): ProcessInfo[] {
     const pid: unknown = Reflect.get(row, 'ProcessId')
     const command: unknown = Reflect.get(row, 'CommandLine')
     if (typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0 && typeof command === 'string') {
-      processes.push({pid, command})
+      const parentPid: unknown = Reflect.get(row, 'ParentProcessId')
+      const parentName: unknown = Reflect.get(row, 'ParentName')
+      processes.push({
+        pid,
+        command,
+        ...(typeof parentPid === 'number' && Number.isSafeInteger(parentPid) ? {parentPid} : {}),
+        ...(typeof parentName === 'string' && parentName !== '' ? {parentName} : {})
+      })
     }
   }
   return processes
@@ -95,6 +105,34 @@ export function findOrphans(processes: ProcessInfo[], query: OrphanQuery): numbe
   return orphans
 }
 
+/**
+ * Los procesos de un navegador con exactamente ese perfil (`--user-data-dir=<dir>`, con o sin
+ * comillas). Tras un traspaso, el navegador relanzado no es hijo nuestro: solo se le encuentra así.
+ */
+export function findHolders(processes: ProcessInfo[], profileDir: string, ignoreCase: boolean): ProcessInfo[] {
+  const fold = (text: string): string => (ignoreCase ? text.toLowerCase() : text)
+  const needle = fold(profileDir)
+  return processes.filter(({command}) => {
+    const haystack = fold(command)
+    for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) {
+      // Que sea la carpeta entera y no el principio de otra (`…-0a1b2c3d-other`).
+      if (!/[\w.-]/.test(haystack.charAt(at + needle.length))) return true
+    }
+    return false
+  })
+}
+
+/** Para el registro: cuántos procesos tienen el perfil y quién lanzó el navegador principal. */
+export function describeHolders(holders: ProcessInfo[]): string {
+  if (holders.length === 0) return 'no process holds the engine profile'
+  const count = holders.length === 1 ? '1 process holds' : `${holders.length} processes hold`
+  // El proceso del navegador es el único sin `--type=` (los demás son sus hijos: renderer, gpu…).
+  const browser = holders.find(holder => !holder.command.includes('--type=')) ?? holders[0]
+  if (browser === undefined) return `${count} the engine profile`
+  const parent = browser.parentName === undefined ? 'unknown' : `${browser.parentName} (${browser.parentPid ?? '?'})`
+  return `${count} the engine profile; browser ${browser.pid} started by ${parent}`
+}
+
 /** Carpetas de perfil (nombres dentro de globalStorage) que ya no usa nadie. */
 export function staleProfiles(names: string[], owner: Ownership): string[] {
   return names.filter(name => {
@@ -114,17 +152,25 @@ export function isAlive(pid: number): boolean {
 }
 
 const LIST_TIMEOUT_MS = 5000
+/** Columna calculada con el nombre del proceso padre (vacía si ya no existe). */
+const PARENT_NAME = "@{n='ParentName';e={(Get-Process -Id $_.ParentProcessId -ErrorAction SilentlyContinue).ProcessName}}"
 
 /**
- * Los procesos cuya línea de órdenes menciona un perfil del motor (en Windows ya filtrados por
- * WQL; en el resto, todos). Rechaza si la orden falla o tarda más de `timeoutMs`.
+ * Los procesos cuya línea de órdenes contiene `like` (por defecto, cualquier perfil del motor; en
+ * Windows ya filtrados por WQL y con su proceso padre; en el resto, todos). Rechaza si la orden
+ * falla o tarda más de `timeoutMs`.
  */
-export function listProcesses(platform: NodeJS.Platform = process.platform, timeoutMs = LIST_TIMEOUT_MS): Promise<ProcessInfo[]> {
+export function listProcesses(
+  platform: NodeJS.Platform = process.platform,
+  timeoutMs = LIST_TIMEOUT_MS,
+  like: string = PROFILE_PREFIX
+): Promise<ProcessInfo[]> {
   if (platform === 'win32') {
     // UTF-8 para que una ruta con acentos (C:\Users\José\…) llegue igual que la que se compara.
     const script = [
       '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-      `Get-CimInstance Win32_Process -Filter "CommandLine like '%${PROFILE_PREFIX}%'" | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress`
+      // Las comillas romperían el filtro WQL: «_» es el comodín de un carácter.
+      `Get-CimInstance Win32_Process -Filter "CommandLine like '%${like.replace(/['"]/g, '_')}%'" | Select-Object ProcessId,ParentProcessId,CommandLine,${PARENT_NAME} | ConvertTo-Json -Compress`
     ].join('; ')
     const encoded = Buffer.from(script, 'utf16le').toString('base64')
     return run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded], timeoutMs).then(

@@ -1,5 +1,7 @@
 import {spawn, type ChildProcess} from 'node:child_process'
+import {basename} from 'node:path'
 import treeKill from 'tree-kill'
+import {findHolders, listProcesses, type ProcessInfo} from './orphans'
 
 export interface EngineArgsOptions {
   url: string
@@ -72,15 +74,35 @@ export interface EngineProcessOptions {
   killTree?: (pid: number, done: (error?: Error) => void) => void
   /** Tope de espera de stop(); después el proceso se da por perdido. */
   stopTimeoutMs?: number
+  /** Los procesos que usan ese perfil (por defecto los busca en el sistema). */
+  findHolders?: (profileDir: string) => Promise<ProcessInfo[]>
+  /** Mata un proceso suelto (por defecto SIGKILL). */
+  killPid?: (pid: number) => void
 }
 
 const STOP_TIMEOUT_MS = 5000
+/** Buscar los procesos de un perfil puede tardar (WMI); al parar se espera más que al limpiar. */
+const HOLDERS_TIMEOUT_MS = 15_000
+
+/** Los procesos del sistema que usan ese perfil del motor. */
+export function profileHolders(profileDir: string): Promise<ProcessInfo[]> {
+  const windows = process.platform === 'win32'
+  return listProcesses(process.platform, HOLDERS_TIMEOUT_MS, basename(profileDir)).then(all => findHolders(all, profileDir, windows))
+}
 
 export class EngineProcess {
   private child: ChildProcess | undefined
   private readonly listeners = new Set<(exit: EngineExit) => void>()
+  private readonly handoffListeners = new Set<() => void>()
   private readonly killTree: (pid: number, done: (error?: Error) => void) => void
   private readonly stopTimeoutMs: number
+  private readonly findHolders: (profileDir: string) => Promise<ProcessInfo[]>
+  private readonly killPid: (pid: number) => void
+  private profileDir: string | undefined
+  /** La página del motor ya habló: a partir de aquí, que el proceso salga es que se cerró. */
+  private ready = false
+  /** El proceso lanzado salió con 0 dejando el navegador a otro proceso (que no es hijo nuestro). */
+  private handedOff = false
 
   constructor(
     private readonly command: string,
@@ -88,14 +110,30 @@ export class EngineProcess {
   ) {
     this.killTree = options.killTree ?? ((pid, done) => treeKill(pid, 'SIGKILL', done))
     this.stopTimeoutMs = options.stopTimeoutMs ?? STOP_TIMEOUT_MS
+    this.findHolders = options.findHolders ?? profileHolders
+    this.killPid = options.killPid ?? (pid => process.kill(pid, 'SIGKILL'))
   }
 
   get running(): boolean {
-    return this.child !== undefined
+    return this.child !== undefined || this.handedOff
   }
 
-  start(args: string[]): void {
-    if (this.child !== undefined) throw new Error('engine already running')
+  /** Perfil del navegador en marcha (para buscar sus procesos tras un traspaso). */
+  get profile(): string | undefined {
+    return this.profileDir
+  }
+
+  /**
+   * `profileDir`: el `--user-data-dir` de este lanzamiento. Con él, una salida con código 0 antes
+   * de `markReady()` se toma por traspaso y no por muerte: hay navegadores que se relanzan solos
+   * (Edge lo hace si VS Code corre como administrador, y en el log de un usuario lo hacía también
+   * sin serlo) y el proceso lanzado sale con 0 en milisegundos mientras el relanzado sigue con
+   * nuestro perfil y nuestra página. Si la página nunca llega, ya lo detecta la sesión.
+   */
+  start(args: string[], opts: {profileDir?: string} = {}): void {
+    if (this.running) throw new Error('engine already running')
+    this.profileDir = opts.profileDir
+    this.ready = false
     // Sin `windowsHide`: en Windows esa opción crea la ventana del navegador oculta, y la mini
     // ventana ni se ve ni reproduce (e2e/player-window.e2e.test.ts). El modo oculto no abre ventana.
     const child = spawn(this.command, args, {stdio: 'ignore'})
@@ -103,6 +141,11 @@ export class EngineProcess {
     const finished = (exit: EngineExit): void => {
       if (this.child !== child) return
       this.child = undefined
+      if (exit.code === 0 && !this.ready && this.profileDir !== undefined) {
+        this.handedOff = true
+        for (const listener of this.handoffListeners) listener()
+        return
+      }
       for (const listener of this.listeners) listener(exit)
     }
     child.once('exit', (code, signal) => finished({code, signal}))
@@ -115,6 +158,7 @@ export class EngineProcess {
    * salida) para que pueda arrancar otro. Nunca rechaza.
    */
   stop(): Promise<void> {
+    if (this.handedOff) return this.stopHolders()
     const child = this.child
     if (child === undefined || child.pid === undefined) return Promise.resolve()
     const pid = child.pid
@@ -131,6 +175,39 @@ export class EngineProcess {
         if (error !== undefined && error !== null) child.kill('SIGKILL')
       })
     })
+  }
+
+  /** La página del motor dijo «ready»: el navegador es el que lanzamos (o el que lo relevó). */
+  markReady(): void {
+    this.ready = true
+  }
+
+  /** Tras un traspaso no hay hijo que matar: se matan los procesos que tienen nuestro perfil. */
+  private async stopHolders(): Promise<void> {
+    const profileDir = this.profileDir
+    this.handedOff = false
+    if (profileDir === undefined) return
+    let holders: ProcessInfo[]
+    try {
+      holders = await this.findHolders(profileDir)
+    } catch {
+      return // al abrir la próxima sala se limpian como huérfanos
+    }
+    for (const {pid} of holders) {
+      try {
+        this.killPid(pid)
+      } catch {
+        // ya había salido
+      }
+    }
+  }
+
+  /** El proceso lanzado salió con 0 antes de que hablara la página: otro proceso sigue con el perfil. */
+  onHandoff(listener: () => void): () => void {
+    this.handoffListeners.add(listener)
+    return () => {
+      this.handoffListeners.delete(listener)
+    }
   }
 
   onExit(listener: (exit: EngineExit) => void): () => void {
