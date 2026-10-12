@@ -18,6 +18,8 @@ function resolveErrorText(error: unknown): string {
       return t('That video cannot be played outside YouTube.')
     case 'network':
       return t('Could not reach YouTube. Check your connection and try again.')
+    case 'search-unavailable':
+      return t('YouTube search is not available right now. Paste a link instead.')
   }
 }
 

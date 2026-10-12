@@ -5,7 +5,8 @@ import {parseYouTubeLink} from './links'
 /** El feed RSS público de YouTube solo devuelve los primeros 15 vídeos de una playlist. */
 export const PLAYLIST_LIMIT = 15
 
-export type ResolveErrorCode = 'invalid-link' | 'not-found' | 'not-embeddable' | 'network'
+/** `search-unavailable`: el endpoint interno de búsqueda cambió o no responde como se espera. */
+export type ResolveErrorCode = 'invalid-link' | 'not-found' | 'not-embeddable' | 'network' | 'search-unavailable'
 
 export class ResolveError extends Error {
   constructor(readonly code: ResolveErrorCode) {
@@ -36,10 +37,10 @@ export interface ResolvedLink {
   startIndex: number
 }
 
-const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
+export const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
 const MAX_TEXT = 300
 
-const defaultGet: HttpGet = (url, init) => fetch(url, {...init, signal: AbortSignal.timeout(15_000)})
+export const defaultGet: HttpGet = (url, init) => fetch(url, {...init, signal: AbortSignal.timeout(15_000)})
 
 /** Los Mixes (list=RD…) los genera YouTube al vuelo: no tienen feed ni salen en el API oficial. */
 export const isMix = (listId: string): boolean => listId.startsWith('RD')
@@ -60,11 +61,11 @@ async function get(url: string, httpGet: HttpGet, init?: HttpInit): Promise<Http
   }
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
+export function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
 
-function text(value: unknown, fallback: string): string {
+export function text(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim() !== '' ? value.trim().slice(0, MAX_TEXT) : fallback
 }
 
@@ -105,27 +106,30 @@ export async function fetchPlaylist(listId: string, httpGet: HttpGet = defaultGe
 }
 
 /**
+ * POST a un endpoint interno de la web de YouTube (`youtubei/v1/<endpoint>`), con el cliente WEB
+ * y sin clave. Sin red o con un 5xx: `network`; cualquier otra respuesta inesperada: `failure`.
+ */
+export async function postYoutubei(endpoint: string, payload: object, failure: ResolveErrorCode, httpGet: HttpGet): Promise<unknown> {
+  const res = await get(`https://www.youtube.com/youtubei/v1/${endpoint}?prettyPrint=false`, httpGet, {
+    method: 'POST',
+    headers: {'content-type': 'application/json'},
+    body: JSON.stringify({context: {client: {clientName: 'WEB', clientVersion: '2.20251001.00.00', hl: 'en'}}, ...payload})
+  })
+  if (!res.ok) throw new ResolveError(res.status >= 500 ? 'network' : failure)
+  try {
+    return JSON.parse(await res.text()) as unknown
+  } catch {
+    throw new ResolveError(failure)
+  }
+}
+
+/**
  * Contenido de un Mix por el mismo endpoint interno que usa la web de YouTube (sin clave ni cuenta).
  * No es un API público: si cambia la forma de la respuesta, se lanza `not-found` y quien llama
  * se queda con el vídeo suelto. El Mix anónimo se parece al del usuario, pero no es idéntico.
  */
 export async function fetchMix(listId: string, videoId: string, httpGet: HttpGet = defaultGet): Promise<ResolvedLink> {
-  const res = await get('https://www.youtube.com/youtubei/v1/next?prettyPrint=false', httpGet, {
-    method: 'POST',
-    headers: {'content-type': 'application/json'},
-    body: JSON.stringify({
-      context: {client: {clientName: 'WEB', clientVersion: '2.20251001.00.00', hl: 'en'}},
-      videoId,
-      playlistId: listId
-    })
-  })
-  if (!res.ok) throw new ResolveError(res.status >= 500 ? 'network' : 'not-found')
-  let data: unknown
-  try {
-    data = JSON.parse(await res.text())
-  } catch {
-    throw new ResolveError('not-found')
-  }
+  const data = await postYoutubei('next', {videoId, playlistId: listId}, 'not-found', httpGet)
   const results = asRecord(asRecord(asRecord(data).contents).twoColumnWatchNextResults)
   const playlist = asRecord(asRecord(results.playlist).playlist)
   const metas: VideoMeta[] = []

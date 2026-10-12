@@ -1,5 +1,6 @@
 import {describe, expect, it} from 'vitest'
 import {PLAYLIST_LIMIT, resolveLink} from '../src/resolve/youtube'
+import {SEARCH_LIMIT, searchVideos} from '../src/resolve/search'
 
 describe('resolve against the real YouTube', () => {
   it('resolves a video through oEmbed', async () => {
@@ -34,5 +35,23 @@ describe('resolve against the real YouTube', () => {
     expect(result.metas[0]?.videoId).toBe('E9EKgA_Gs2c')
     expect(result.startIndex).toBe(0)
     for (const meta of result.metas) expect(meta.title.length).toBeGreaterThan(0)
+  })
+})
+
+describe('search against the real YouTube', () => {
+  it('finds playable videos with title, channel and duration', async () => {
+    const results = await searchVideos('bad bunny dakiti')
+    expect(results.length).toBeGreaterThan(3)
+    expect(results.length).toBeLessThanOrEqual(SEARCH_LIMIT)
+    for (const result of results) {
+      expect(result.videoId).toMatch(/^[A-Za-z0-9_-]{11}$/)
+      expect(result.title.length).toBeGreaterThan(0)
+    }
+    expect(results.some(result => result.duration !== null && /^\d+:\d\d/.test(result.duration))).toBe(true)
+  })
+
+  it('marks live streams with no duration', async () => {
+    const results = await searchVideos('lofi hip hop radio live')
+    expect(results.some(result => result.duration === null)).toBe(true)
   })
 })
