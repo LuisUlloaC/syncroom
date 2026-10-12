@@ -2,6 +2,8 @@ import {useEffect, useRef, useState} from 'preact/hooks'
 import {formatRoomCode} from '../core/ids'
 import type {ChatLine, PolicyView, RoomView, TrackView} from '../host/session'
 import type {HostToWebview, ListingView, LobbyView, ViewState, WebviewToHost} from '../protocol/webview'
+import type {SearchResult} from '../resolve/search'
+import {addIntent} from './add-box'
 import {clock, thumbnail} from './format'
 import {dropPlacement, type DropTarget} from './queue-drop'
 import {Icon} from './icons'
@@ -18,6 +20,8 @@ const s = (key: string): string => strings[key] ?? key
 const post = (message: WebviewToHost): void => vscode.postMessage(message)
 /** La conexión de la vista previa vive fuera de los componentes: sobrevive a los repintados. */
 const preview = new PreviewLink(post)
+/** Las respuestas de búsqueda llegan al listener global; la caja de añadir se suscribe aquí. */
+const searchReplies: {listener?: (reply: Extract<HostToWebview, {t: 'searchResults'}>) => void} = {}
 
 export function App() {
   const [state, setState] = useState<ViewState>({
@@ -30,6 +34,7 @@ export function App() {
       const msg = event.data
       if (msg.t === 'state') setState(msg.state)
       else if (msg.t === 'rtc' || msg.t === 'previewEnd') void preview.handle(msg)
+      else if (msg.t === 'searchResults') searchReplies.listener?.(msg)
     }
     window.addEventListener('message', onMessage)
     post({t: 'ready'})
@@ -255,7 +260,7 @@ function Room({room, playerVisible, listing, groups, videoPreview}: RoomProps) {
         </div>
       </section>
 
-      <AddLink disabled={!canEdit} />
+      <AddBox disabled={!canEdit} />
       <Queue tracks={room.tracks} policy={room.policy} />
     </main>
   )
@@ -385,31 +390,138 @@ function Scrubber({position, duration, disabled}: {position: number; duration: n
   )
 }
 
-function AddLink({disabled}: {disabled: boolean}) {
-  const [url, setUrl] = useState('')
+type SearchState =
+  | {status: 'closed'}
+  | {status: 'searching'; id: number}
+  | {status: 'done'; results: SearchResult[]; error: string | null}
+
+/** Una sola caja: un enlace se añade tal cual; cualquier otro texto se busca en YouTube al pulsar Enter. */
+function AddBox({disabled}: {disabled: boolean}) {
+  const [text, setText] = useState('')
+  const [search, setSearch] = useState<SearchState>({status: 'closed'})
+  /** Vídeos añadidos desde esta lista de resultados (para marcarlos). */
+  const [added, setAdded] = useState<ReadonlySet<string>>(new Set())
+  const lastId = useRef(0)
+  const intent = addIntent(text)
+
+  useEffect(() => {
+    searchReplies.listener = reply => {
+      // Solo cuenta la respuesta a la última búsqueda y si la lista sigue abierta.
+      if (reply.id !== lastId.current) return
+      setSearch(current => (current.status === 'searching' ? {status: 'done', results: reply.results, error: reply.error} : current))
+    }
+    return () => {
+      searchReplies.listener = undefined
+    }
+  }, [])
+
+  const close = (): void => {
+    lastId.current += 1
+    setSearch({status: 'closed'})
+  }
+  const addVideo = (videoId: string, next: boolean): void => {
+    post({t: 'add', url: `https://youtu.be/${videoId}`, next})
+    setAdded(current => new Set(current).add(videoId))
+  }
+
   return (
-    <form
-      class="add"
-      onSubmit={event => {
-        event.preventDefault()
-        if (url.trim() === '') return
-        post({t: 'add', url})
-        setUrl('')
-      }}
-    >
-      <input
-        value={url}
-        placeholder={s('add.placeholder')}
-        aria-label={s('add.placeholder')}
-        spellcheck={false}
-        autocomplete="off"
-        disabled={disabled}
-        onInput={event => setUrl(event.currentTarget.value)}
-      />
-      <button type="submit" disabled={url.trim() === '' || disabled}>
-        {s('add.button')}
-      </button>
-    </form>
+    <section class="adder">
+      <form
+        class="add"
+        onSubmit={event => {
+          event.preventDefault()
+          if (intent.kind === 'link') {
+            post({t: 'add', url: text})
+            setText('')
+            close()
+          } else if (intent.kind === 'search') {
+            lastId.current += 1
+            setAdded(new Set())
+            setSearch({status: 'searching', id: lastId.current})
+            post({t: 'search', id: lastId.current, query: intent.query})
+          }
+        }}
+      >
+        <input
+          value={text}
+          placeholder={s('add.placeholder')}
+          aria-label={s('add.placeholder')}
+          spellcheck={false}
+          autocomplete="off"
+          disabled={disabled}
+          onInput={event => {
+            const value = event.currentTarget.value
+            setText(value)
+            if (value.trim() === '') close()
+          }}
+          onKeyDown={event => {
+            if (event.key === 'Escape' && search.status !== 'closed') {
+              event.preventDefault()
+              close()
+            }
+          }}
+        />
+        <button type="submit" disabled={intent.kind === 'empty' || disabled || search.status === 'searching'}>
+          {intent.kind === 'search' ? s('add.search') : s('add.button')}
+        </button>
+      </form>
+      {search.status !== 'closed' && (
+        <div class="results" aria-live="polite">
+          <div class="head">
+            <span>
+              {search.status === 'searching'
+                ? s('search.searching')
+                : (search.error ?? (search.results.length === 0 ? s('search.none') : s('search.title')))}
+            </span>
+            <button class="icon" onClick={close} title={s('search.close')} aria-label={s('search.close')}>
+              <Icon name="close" />
+            </button>
+          </div>
+          {search.status === 'searching' && <div class="loading" role="progressbar" aria-label={s('search.searching')} />}
+          {search.status === 'done' && search.results.length > 0 && (
+            <ol>
+              {search.results.map(result => {
+                const done = added.has(result.videoId)
+                return (
+                  <li key={result.videoId} class={done ? 'added' : undefined}>
+                    <img src={thumbnail(result.videoId)} alt="" loading="lazy" />
+                    <span class="info">
+                      <span class="t" title={result.title}>
+                        {result.title}
+                      </span>
+                      <span class="m">
+                        {result.author !== '' && <span class="who">{result.author}</span>}
+                        {result.duration === null ? <span class="live">{s('search.live')}</span> : <span class="dur">{result.duration}</span>}
+                      </span>
+                    </span>
+                    <span class="tools">
+                      <button
+                        class="icon"
+                        disabled={disabled}
+                        onClick={() => addVideo(result.videoId, true)}
+                        title={s('queue.playNext')}
+                        aria-label={s('queue.playNext')}
+                      >
+                        <Icon name="up" />
+                      </button>
+                      <button
+                        class={done ? 'icon on' : 'icon'}
+                        disabled={disabled}
+                        onClick={() => addVideo(result.videoId, false)}
+                        title={done ? s('search.added') : s('search.add')}
+                        aria-label={done ? s('search.added') : s('search.add')}
+                      >
+                        <Icon name={done ? 'check' : 'plus'} />
+                      </button>
+                    </span>
+                  </li>
+                )
+              })}
+            </ol>
+          )}
+        </div>
+      )}
+    </section>
   )
 }
 

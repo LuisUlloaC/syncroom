@@ -85,7 +85,7 @@
       'room.badgePublic': 'Public',
       'room.badgeGroup': 'Group',
       'player.nothing': 'Nothing playing',
-      'player.hint': 'Paste a YouTube link below to start.',
+      'player.hint': 'Search YouTube or paste a link below to start.',
       'player.play': 'Play',
       'player.pause': 'Pause',
       'player.next': 'Next',
@@ -96,8 +96,16 @@
       'player.previewOn': 'Show the video here',
       'player.previewOff': 'Show only the thumbnail',
       'player.unplayable': 'This video is not available for you.',
-      'add.placeholder': 'YouTube video or playlist link',
+      'add.placeholder': 'Search YouTube or paste a link',
       'add.button': 'Add',
+      'add.search': 'Search',
+      'search.title': 'Results',
+      'search.searching': 'Searching YouTube…',
+      'search.none': 'No videos found.',
+      'search.close': 'Close results',
+      'search.live': 'LIVE',
+      'search.add': 'Add to queue',
+      'search.added': 'Added — add again',
       'queue.title': 'Queue',
       'queue.empty': 'The queue is empty.',
       'queue.playNow': 'Play now',
@@ -174,8 +182,29 @@
       postMessage: message => {
         console.log('to host', message)
         if (message.t === 'ready') window.postMessage({t: 'state', state}, '*')
+        // Búsqueda de mentira: ?search=<texto> la lanza sola al cargar; ?search-error=1 simula el fallo.
+        if (message.t === 'search') {
+          const reply = params.get('search-error') === '1'
+            ? {results: [], error: 'YouTube search is not available right now. Paste a link instead.'}
+            : {results: fakeResults, error: null}
+          setTimeout(() => window.postMessage({t: 'searchResults', id: message.id, ...reply}, '*'), 400)
+        }
       }
     })
+    const fakeResults = [
+      {videoId: 'TmKh7lAwnBI', title: 'BAD BUNNY x JHAY CORTEZ - DÁKITI | EL ÚLTIMO TOUR DEL MUNDO (Official Video)', author: 'Bad Bunny', duration: '3:34'},
+      {videoId: 'rFZHOHl-L8A', title: 'lofi hip hop radio 📚 beats to relax/study to', author: 'Lofi Girl', duration: null},
+      {videoId: 'doLMt10ytHY', title: 'Bad Bunny - Yonaguni (Official Video)', author: 'Bad Bunny', duration: '3:31'},
+      {videoId: 'wkuT_VJbUrc', title: 'BAD BUNNY MIX 2025 - 30 Las mejores canciones de Bad Bunny 2025', author: 'Kazi Smrity', duration: '2:28:36'}
+    ]
+    if (params.get('search') !== null) {
+      setTimeout(() => {
+        const input = document.querySelector('.add input')
+        input.value = params.get('search')
+        input.dispatchEvent(new Event('input', {bubbles: true}))
+        setTimeout(() => document.querySelector('.add button').click(), 50)
+      }, 300)
+    }
   </script>
   <script src="../../dist/webview/webview.js"></script>
 </body>

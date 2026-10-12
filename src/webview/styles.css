@@ -188,6 +188,58 @@ button.link:hover:not(:disabled) { background: none; color: var(--vscode-textLin
 
 .add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; }
 
+/* ── Resultados de búsqueda (debajo de la caja de añadir) ── */
+
+.adder { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.4rem; }
+.results {
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 0.25rem; overflow: hidden;
+  background: var(--vscode-editorWidget-background, transparent);
+}
+.results .head {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  padding: 0.15rem 0.2rem 0.15rem 0.6rem;
+  font-size: 0.88em; color: var(--vscode-descriptionForeground);
+}
+.results .loading { height: 1px; overflow: hidden; position: relative; }
+.results .loading::after {
+  content: ''; position: absolute; inset: 0; width: 40%;
+  background: var(--vscode-progressBar-background);
+  animation: results-scan 1.1s ease-in-out infinite;
+}
+@keyframes results-scan { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .results .loading::after { animation: none; width: 100%; opacity: 0.5; } }
+.results ol {
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  max-height: min(24rem, 55vh); margin: 0; padding: 0; overflow-y: auto; list-style: none;
+  border-top: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+}
+.results li {
+  display: grid; grid-template-columns: 4.6rem minmax(0, 1fr) auto; align-items: center; gap: 0.5rem;
+  padding: 0.3rem 0.3rem 0.3rem 0.5rem;
+}
+.results li:hover, .results li:focus-within { background: var(--vscode-list-hoverBackground); }
+.results img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 0.2rem; background: var(--vscode-input-background); }
+.results li.added img { opacity: 0.55; }
+.results .info { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 0.1rem; }
+.results .t {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  line-height: 1.3; overflow-wrap: anywhere;
+}
+.results .m { display: flex; align-items: center; gap: 0.4em; min-width: 0; font-size: 0.88em; color: var(--vscode-descriptionForeground); }
+.results .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.results .dur { flex: none; font-variant-numeric: tabular-nums; }
+.results .who + .dur::before { content: '·'; margin-right: 0.4em; }
+.results .live {
+  flex: none; padding: 0 0.35em; border-radius: 0.2rem;
+  font-size: 0.85em; font-weight: 600; letter-spacing: 0.02em;
+  background: var(--vscode-statusBarItem-errorBackground, #c72e0f); color: var(--vscode-statusBarItem-errorForeground, #fff);
+}
+.results .tools { display: flex; align-items: center; }
+.results li:not(:hover):not(:focus-within) .tools .icon:first-child { visibility: hidden; }
+.results li.added .tools .icon.on { color: var(--vscode-testing-iconPassed, var(--vscode-foreground)); }
+
 .queue { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
 .queue .hint { color: var(--vscode-descriptionForeground); }
 .queue h3 { align-items: center; gap: 0.5rem; }
