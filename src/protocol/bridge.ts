@@ -36,6 +36,8 @@ export type HostToEngine =
   | {t: 'send'; msg: RoomMessage; relay: boolean}
   | {t: 'player'; cmd: PlayerCommand}
   | {t: 'volume'; value: number}
+  /** Aviso sonoro corto: llegó un mensaje de chat de otro. */
+  | {t: 'chime'}
   /** Empezar o dejar de capturar la pestaña para la vista previa. */
   | {t: 'preview'; on: boolean}
   | {t: 'rtc'; signal: RtcSignal}

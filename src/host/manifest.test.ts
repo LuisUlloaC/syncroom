@@ -83,7 +83,7 @@ describe('manifest', () => {
   it('registers every contributed command', () => {
     const declared = manifest.contributes.commands.map(c => c.command).sort()
     const registered = [...hostSource.matchAll(/'(syncroom\.[A-Za-z]+)':/g)].map(m => m[1] ?? '').sort()
-    expect(declared).toHaveLength(11)
+    expect(declared).toHaveLength(13)
     expect(registered).toEqual(declared)
   })
 
@@ -92,7 +92,7 @@ describe('manifest', () => {
   })
 
   it('keeps every other setting at user level', () => {
-    for (const key of ['syncroom.displayName', 'syncroom.directConnections', 'syncroom.relays', 'syncroom.videoPreview']) {
+    for (const key of ['syncroom.displayName', 'syncroom.directConnections', 'syncroom.relays', 'syncroom.videoPreview', 'syncroom.chatSound']) {
       expect(manifest.contributes.configuration.properties[key]?.scope, key).toBe('application')
     }
   })

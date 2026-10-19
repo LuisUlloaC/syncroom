@@ -8,7 +8,7 @@ Listen to YouTube together without leaving VS Code. One person creates a room, s
 1. Open the **SyncRoom** view in the activity bar and choose **Create room**.
 2. Send the room code to your friends. They choose **Join** and type it.
 3. Search YouTube from the box under the player, or paste a video or playlist link. Each result has buttons to add it to the queue or play it next. Anyone in the room can add, reorder, skip, pause or seek.
-4. The chat has its own icon in the activity bar; unread messages show as a badge on it.
+4. The chat has its own icon in the activity bar; unread messages show as a badge on it, and a short sound plays when someone else writes. Mute it with the bell button on the chat view (or the `syncroom.chatSound` setting).
 5. Whoever created the room can lock the queue and the playback with the two toggles in the queue header, so only they can change the list or play, pause and skip.
 6. The owner can choose **Who can find this room**: private (code only), public, or a group. Public and group rooms appear under **Open rooms** in the lobby. A group is a shared word (at least 8 characters): add it with **+ Group** and you will see the rooms listed for it.
 7. The SyncRoom view shows the video of the current track, live. It is captured from the hidden player on your computer and goes only to the view, while the view is open; nothing is sent to the room. Turn it off with the camera button on the picture (or the `syncroom.videoPreview` setting) to see only the thumbnail.
@@ -47,6 +47,7 @@ There is no account and no SyncRoom server. Rooms exist only while someone is in
 | `syncroom.directConnections` | `true` | Connect peer to peer. Turn off to hide your IP from the room |
 | `syncroom.relays` | 4 public relays | Nostr relays used as a fallback path |
 | `syncroom.videoPreview` | `true` | Show the video of the current track in the SyncRoom view (captured on your computer, never sent to the room) |
+| `syncroom.chatSound` | `true` | Play a short sound when someone else writes in the room chat |
 
 ## Privacy
 

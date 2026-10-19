@@ -377,7 +377,8 @@ export class RoomController implements vscode.Disposable {
       volume: this.context.globalState.get<number>('volume', DEFAULT_VOLUME),
       link: bridge,
       resolve: input => resolveLink(input),
-      log: text => this.log(text)
+      log: text => this.log(text),
+      chatSound: () => vscode.workspace.getConfiguration('syncroom').get<boolean>('chatSound', true)
     })
     const room: ActiveRoom = {
       session,

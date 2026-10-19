@@ -1,4 +1,5 @@
 import type {HostToEngine} from '../protocol/bridge'
+import {chime} from './chime'
 import {HostLink} from './link'
 import {deriveRoomKeys} from '../core/crypto'
 import {createDirectPath} from './net/direct'
@@ -77,6 +78,9 @@ async function main(): Promise<void> {
         break
       case 'volume':
         player?.setVolume(msg.value)
+        break
+      case 'chime':
+        chime()
         break
       case 'preview':
         // Sin await: la captura no debe frenar la cola de mensajes de la sala. Un start() o stop()

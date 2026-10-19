@@ -157,6 +157,11 @@ export class Actions {
     await this.controller.setVideoPreview(on)
   }
 
+  /** Aviso sonoro de mensajes de chat: preferencia de este usuario. El botón de la vista sigue al ajuste. */
+  async setChatSound(on: boolean): Promise<void> {
+    await vscode.workspace.getConfiguration('syncroom').update('chatSound', on, vscode.ConfigurationTarget.Global)
+  }
+
   sendRtc(signal: RtcSignal): void {
     this.controller.sendRtc(signal)
   }
@@ -196,6 +201,8 @@ export function registerCommands(actions: Actions): vscode.Disposable[] {
     'syncroom.togglePlayer': () => actions.togglePlayer(),
     'syncroom.copyCode': () => actions.copyCode(),
     'syncroom.changeName': () => actions.changeName(),
+    'syncroom.muteChat': () => actions.setChatSound(false),
+    'syncroom.unmuteChat': () => actions.setChatSound(true),
     'syncroom.showLog': () => actions.showLog(),
     'syncroom.reportBug': () => actions.reportBug()
   }

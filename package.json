@@ -82,6 +82,18 @@
         "category": "SyncRoom"
       },
       {
+        "command": "syncroom.muteChat",
+        "title": "%command.muteChat%",
+        "category": "SyncRoom",
+        "icon": "$(bell)"
+      },
+      {
+        "command": "syncroom.unmuteChat",
+        "title": "%command.unmuteChat%",
+        "category": "SyncRoom",
+        "icon": "$(bell-slash)"
+      },
+      {
         "command": "syncroom.reportBug",
         "title": "%command.reportBug%",
         "category": "SyncRoom"
@@ -117,6 +129,26 @@
         {
           "command": "syncroom.copyCode",
           "when": "syncroom.inRoom"
+        },
+        {
+          "command": "syncroom.muteChat",
+          "when": "config.syncroom.chatSound"
+        },
+        {
+          "command": "syncroom.unmuteChat",
+          "when": "!config.syncroom.chatSound"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "syncroom.muteChat",
+          "when": "view == syncroom.chat && config.syncroom.chatSound",
+          "group": "navigation"
+        },
+        {
+          "command": "syncroom.unmuteChat",
+          "when": "view == syncroom.chat && !config.syncroom.chatSound",
+          "group": "navigation"
         }
       ]
     },
@@ -177,6 +209,12 @@
           "default": true,
           "scope": "application",
           "description": "%config.videoPreview%"
+        },
+        "syncroom.chatSound": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%config.chatSound%"
         },
         "syncroom.relays": {
           "type": "array",

@@ -26,6 +26,8 @@ export interface SessionOptions {
   readyTimeoutMs?: number
   /** Registro de diagnóstico (canal de salida de VS Code). */
   log?: (text: string) => void
+  /** Si suena un aviso al llegar un mensaje de chat de otro (ajuste del usuario, se lee en cada mensaje). */
+  chatSound?: () => boolean
 }
 
 export interface TrackView {
@@ -353,6 +355,7 @@ export class RoomSession {
           if (this.chat.some(line => line.kind === 'message' && line.from === from && line.id === id)) break
           const name = msg.msg.name !== '' ? msg.msg.name : this.state.peerName(from)
           this.pushChat({key: 0, id, kind: 'message', from, name, text, at: this.now(), mine: false})
+          if (this.opts.chatSound?.() === true) this.opts.link.send({t: 'chime'})
           this.emit()
         }
         break

@@ -592,6 +592,28 @@ describe('chat', () => {
     ])
   })
 
+  it('chimes once per new message from someone else, and only with the chat sound on', () => {
+    let sound = true
+    const {link, session} = setup({chatSound: () => sound})
+    link.emit({t: 'ready'})
+    link.take()
+    const chimes = () => link.take().filter(m => m.t === 'chime').length
+    const other = remotePeer('other')
+    for (const o of other.join()) link.emit({t: 'msg', msg: o.msg, via: 'relay'})
+    expect(chimes()).toBe(0)
+    const hello = other.chatMessage('hola').msg
+    link.emit({t: 'msg', msg: hello, via: 'relay'})
+    // El mismo mensaje por la otra vía no vuelve a sonar.
+    link.emit({t: 'msg', msg: hello, via: 'direct'})
+    expect(chimes()).toBe(1)
+    session.say('yo también')
+    expect(chimes()).toBe(0)
+    sound = false
+    link.emit({t: 'msg', msg: other.chatMessage('¿me oyes?').msg, via: 'relay'})
+    expect(chimes()).toBe(0)
+    expect(lines(session).filter(l => l[0] === 'message')).toHaveLength(3)
+  })
+
   it('writes «joined» before a newcomer’s first chat message', () => {
     const {link, session} = setup()
     link.emit({t: 'ready'})
