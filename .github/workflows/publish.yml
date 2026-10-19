@@ -1,0 +1,54 @@
+# Al empujar un tag vX.Y.Z: comprueba, empaqueta y publica en el Marketplace de VS Code y en Open VSX,
+# y deja el .vsix en una release de GitHub. Secretos del repo: VSCE_PAT y OVSX_PAT.
+name: Publish
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    # Windows: los tests del motor (procesos, perfiles) se escribieron y pasan ahí.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.27.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: El tag coincide con la versión de package.json
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "El tag $GITHUB_REF_NAME no coincide con package.json ($version)"
+            exit 1
+          fi
+          echo "VSIX=syncroom-$version.vsix" >> "$GITHUB_ENV"
+
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm package
+
+      - name: Marketplace de VS Code
+        run: pnpm exec vsce publish --packagePath ${{ env.VSIX }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      - name: Open VSX
+        run: pnpm exec ovsx publish ${{ env.VSIX }}
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+      - name: Release de GitHub con el .vsix
+        shell: bash
+        run: gh release create "$GITHUB_REF_NAME" "$VSIX" --title "$GITHUB_REF_NAME" --notes "Ver CHANGELOG.md"
+        env:
+          GH_TOKEN: ${{ github.token }}
