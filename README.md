@@ -7,7 +7,7 @@ Listen to YouTube together without leaving VS Code. One person creates a room, s
 
 1. Open the **SyncRoom** view in the activity bar and choose **Create room**.
 2. Send the room code to your friends. They choose **Join** and type it.
-3. Search YouTube from the box under the player, or paste a video or playlist link. Each result has buttons to add it to the queue or play it next. Anyone in the room can add, reorder, skip, pause or seek.
+3. Search YouTube from the box under the player, or paste a video or playlist link. Results include a few playlists among the videos; adding one adds the whole playlist. Each result has buttons to add it to the queue or play it next. Anyone in the room can add, reorder, skip, pause or seek.
 4. The chat has its own icon in the activity bar; unread messages show as a badge on it, and a short sound plays when someone else writes. Mute it with the bell button on the chat view (or the `syncroom.chatSound` setting).
 5. Whoever created the room can lock the queue and the playback with the two toggles in the queue header, so only they can change the list or play, pause and skip.
 6. The owner can choose **Who can find this room**: private (code only), public, or a group. Public and group rooms appear under **Open rooms** in the lobby. A group is a shared word (at least 8 characters): add it with **+ Group** and you will see the rooms listed for it.
@@ -30,7 +30,7 @@ There is no account and no SyncRoom server. Rooms exist only while someone is in
 | SyncRoom: Create Room | Start a new room |
 | SyncRoom: Join Room… | Enter a room with its code |
 | SyncRoom: Add YouTube Link… | Add a video or playlist to the queue |
-| SyncRoom: Play / Pause | Also available by clicking the status bar |
+| SyncRoom: Play / Pause | Also available by clicking the status bar button, which is highlighted so you can tell which VS Code window has the room |
 | SyncRoom: Next Track | Skip for everyone |
 | SyncRoom: Show or Hide Player Window | Toggle the small YouTube window |
 | SyncRoom: Copy Room Code | Copy the code to share it |

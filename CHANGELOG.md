@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.0
+
+- YouTube search also finds **playlists**: up to three appear among the videos, with the number of videos on the thumbnail. Adding one adds the whole playlist (up to 15 videos, as when pasting its link).
+- A short **sound** plays when someone else writes in the chat. Mute it with the bell button on the chat view or the `syncroom.chatSound` setting.
+- The SyncRoom button in the status bar is **highlighted**, so among several VS Code windows you can tell which one has the room.
+- Fixed: after leaving a room, the status bar button kept showing the track for a few seconds (and, for some people, did not go away). It now goes away at once. The log says when leaving has finished.
+
 ## 0.9.0
 
 - Error messages have a **Report bug** button, and there is a new command **SyncRoom: Report a Bug…**. It opens a new GitHub issue already filled in with the SyncRoom, VS Code and system versions and the end of the log, so there is no need to copy the log by hand. Your user name is removed from paths and room codes are hidden; you see the issue before sending it (a GitHub account is needed).
