@@ -9,6 +9,8 @@ export function createStatusBar(controller: RoomController): vscode.Disposable {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0)
   item.command = 'syncroom.togglePlay'
   item.tooltip = t('Click to play or pause')
+  // Con color de fondo: entre varias ventanas de VS Code se ve de un vistazo cuál tiene la sala.
+  item.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
 
   const update = (): void => {
     const state = controller.viewState()
