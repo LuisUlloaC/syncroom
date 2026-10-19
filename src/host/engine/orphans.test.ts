@@ -237,7 +237,8 @@ describe('listProcesses', () => {
     const marker = join(tmpdir(), 'José', 'engine-profile-424242-0a1b2c3d')
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', marker], {stdio: 'ignore', windowsHide: true})
     try {
-      const processes = await listProcesses()
+      // Margen amplio: en un runner de CI recién arrancado, el primer PowerShell con CIM pasa de 5 s.
+      const processes = await listProcesses(process.platform, 15_000)
       const found = processes.find(info => info.pid === child.pid)
       expect(found?.command).toContain(marker)
     } finally {
