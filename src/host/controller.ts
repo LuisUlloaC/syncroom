@@ -230,14 +230,16 @@ export class RoomController implements vscode.Disposable {
     room.expectedExit = true
     this.log('leaving the room')
     room.session.dispose()
+    // La vista, la barra de estado y los menús dejan la sala ya: parar el motor tarda segundos.
+    void vscode.commands.executeCommand('setContext', 'syncroom.inRoom', false)
+    this.changed.fire()
     if (opts.goodbye !== false) await new Promise(done => setTimeout(done, GOODBYE_MS))
     await room.engine.stop()
     await room.bridge.close()
     // El perfil es desechable: así nunca queda un navegador «restaurando» sesiones anteriores.
     if (room.profileDir !== undefined) await removeProfile(room.profileDir)
     await retiring
-    await vscode.commands.executeCommand('setContext', 'syncroom.inRoom', false)
-    this.changed.fire()
+    this.log('left the room')
   }
 
   /** Alterna entre motor oculto y mini ventana. Reinicia el navegador; la sala sigue en memoria. */
