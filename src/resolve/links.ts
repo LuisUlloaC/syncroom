@@ -4,7 +4,7 @@ export type ParsedLink =
   | {kind: 'playlist'; listId: string; videoId?: string}
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
-const LIST_ID = /^[A-Za-z0-9_-]{10,64}$/
+export const LIST_ID = /^[A-Za-z0-9_-]{10,64}$/
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i
 const YOUTUBE_HOSTS = new Set([
   'youtube.com',

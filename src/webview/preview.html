@@ -106,6 +106,8 @@
       'search.live': 'LIVE',
       'search.add': 'Add to queue',
       'search.added': 'Added — add again',
+      'search.playlist': 'Playlist',
+      'search.addPlaylist': 'Add the whole playlist to the queue',
       'queue.title': 'Queue',
       'queue.empty': 'The queue is empty.',
       'queue.playNow': 'Play now',
@@ -192,10 +194,12 @@
       }
     })
     const fakeResults = [
-      {videoId: 'TmKh7lAwnBI', title: 'BAD BUNNY x JHAY CORTEZ - DÁKITI | EL ÚLTIMO TOUR DEL MUNDO (Official Video)', author: 'Bad Bunny', duration: '3:34'},
-      {videoId: 'rFZHOHl-L8A', title: 'lofi hip hop radio 📚 beats to relax/study to', author: 'Lofi Girl', duration: null},
-      {videoId: 'doLMt10ytHY', title: 'Bad Bunny - Yonaguni (Official Video)', author: 'Bad Bunny', duration: '3:31'},
-      {videoId: 'wkuT_VJbUrc', title: 'BAD BUNNY MIX 2025 - 30 Las mejores canciones de Bad Bunny 2025', author: 'Kazi Smrity', duration: '2:28:36'}
+      {kind: 'video', videoId: 'TmKh7lAwnBI', title: 'BAD BUNNY x JHAY CORTEZ - DÁKITI | EL ÚLTIMO TOUR DEL MUNDO (Official Video)', author: 'Bad Bunny', duration: '3:34'},
+      {kind: 'video', videoId: 'rFZHOHl-L8A', title: 'lofi hip hop radio 📚 beats to relax/study to', author: 'Lofi Girl', duration: null},
+      {kind: 'playlist', listId: 'PLYglnXQVa7ri7yma8o8yB2AlrbYGznji5', videoId: '1Nr_tqkMsJs', title: 'Calle 13 - Greatest Hits', author: 'Calle13VEVO', count: 32},
+      {kind: 'video', videoId: 'doLMt10ytHY', title: 'Bad Bunny - Yonaguni (Official Video)', author: 'Bad Bunny', duration: '3:31'},
+      {kind: 'video', videoId: 'wkuT_VJbUrc', title: 'BAD BUNNY MIX 2025 - 30 Las mejores canciones de Bad Bunny 2025', author: 'Kazi Smrity', duration: '2:28:36'},
+      {kind: 'playlist', listId: 'RDEMAwkGY9PRZjwjNZSPiC', videoId: 'vXtJkDHEAAc', title: 'Mix - Calle 13', author: 'Calle 13, Don Omar and more', count: null}
     ]
     if (params.get('search') !== null) {
       setTimeout(() => {

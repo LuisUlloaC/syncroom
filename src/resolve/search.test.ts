@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest'
-import {SEARCH_LIMIT, searchVideos} from './search'
+import {SEARCH_LIMIT, search, searchPlaylists, searchVideos} from './search'
 import {ResolveError, type HttpGet, type HttpInit} from './youtube'
 
 const respond = (status: number, body: string): HttpGet => async () => ({
@@ -74,8 +74,8 @@ describe('searchVideos', () => {
       )
     )
     expect(results).toEqual([
-      {videoId: 'TmKh7lAwnBI', title: 'BAD BUNNY x JHAY CORTEZ - DÁKITI', author: 'Bad Bunny', duration: '3:34'},
-      {videoId: 'wkuT_VJbUrc', title: 'BAD BUNNY MIX 2025', author: 'Kazi Smrity', duration: '2:28:36'}
+      {kind: 'video', videoId: 'TmKh7lAwnBI', title: 'BAD BUNNY x JHAY CORTEZ - DÁKITI', author: 'Bad Bunny', duration: '3:34'},
+      {kind: 'video', videoId: 'wkuT_VJbUrc', title: 'BAD BUNNY MIX 2025', author: 'Kazi Smrity', duration: '2:28:36'}
     ])
   })
 
@@ -90,7 +90,7 @@ describe('searchVideos', () => {
         ])
       )
     )
-    expect(results).toEqual([{videoId: 'rFZHOHl-L8A', title: 'lofi hip hop radio', author: 'Lofi Girl', duration: null}])
+    expect(results).toEqual([{kind: 'video', videoId: 'rFZHOHl-L8A', title: 'lofi hip hop radio', author: 'Lofi Girl', duration: null}])
   })
 
   it('drops invalid ids and duplicates, and keeps at most the limit', async () => {
@@ -124,5 +124,113 @@ describe('searchVideos', () => {
       throw new TypeError('fetch failed')
     }
     expect(await codeOf(searchVideos('x', offline))).toBe('network')
+  })
+})
+
+/** Un `lockupViewModel` de lista con la forma que devuelve hoy la búsqueda filtrada por listas. */
+const playlist = (listId: string, firstVideo: string, title: string, owner: string, badge: string, contentType = 'LOCKUP_CONTENT_TYPE_PLAYLIST'): unknown => ({
+  lockupViewModel: {
+    contentImage: {
+      collectionThumbnailViewModel: {
+        primaryThumbnail: {
+          thumbnailViewModel: {
+            image: {sources: [{url: `https://i.ytimg.com/vi/${firstVideo}/hqdefault.jpg`}]},
+            overlays: [
+              {thumbnailOverlayBadgeViewModel: {thumbnailBadges: [{thumbnailBadgeViewModel: {icon: {}, text: badge}}]}},
+              {thumbnailHoverOverlayViewModel: {text: {content: 'Play all'}}}
+            ]
+          }
+        }
+      }
+    },
+    metadata: {
+      lockupMetadataViewModel: {
+        title: {content: title},
+        metadata: {contentMetadataViewModel: {metadataRows: [{metadataParts: [{text: {content: owner}}, {text: {content: 'Playlist'}}]}]}}
+      }
+    },
+    contentId: listId,
+    contentType,
+    rendererContext: {commandContext: {onTap: {innertubeCommand: {watchEndpoint: {videoId: firstVideo, playlistId: listId}}}}}
+  }
+})
+
+describe('searchPlaylists', () => {
+  it('asks for playlists only and reads id, first video, title, owner and size', async () => {
+    let body: Record<string, unknown> = {}
+    const get: HttpGet = async (_url, init) => {
+      body = JSON.parse(init?.body ?? '{}') as Record<string, unknown>
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          page([
+            playlist('PLar0gUcrS11h5SV8Eskz7s8NEL7Rn35tt', 'vXtJkDHEAAc', 'Calle 13. Mejores canciones', 'Planeta Musik', '32 videos'),
+            playlist('PLbig000000000000', 'TmKh7lAwnBI', 'Huge', 'Someone', '1,204 videos'),
+            playlist('RDEMAwkGY9PRZjwjNZSPiC', 'vXtJkDHEAAc', 'Mix - Calle 13', 'Calle 13 and more', 'Mix')
+          ])
+      }
+    }
+    const results = await searchPlaylists('calle 13', get)
+    // «Tipo: lista» del filtro de la web.
+    expect(body.params).toBe('EgIQAw%3D%3D')
+    expect(results).toEqual([
+      {kind: 'playlist', listId: 'PLar0gUcrS11h5SV8Eskz7s8NEL7Rn35tt', videoId: 'vXtJkDHEAAc', title: 'Calle 13. Mejores canciones', author: 'Planeta Musik', count: 32},
+      {kind: 'playlist', listId: 'PLbig000000000000', videoId: 'TmKh7lAwnBI', title: 'Huge', author: 'Someone', count: 1204},
+      {kind: 'playlist', listId: 'RDEMAwkGY9PRZjwjNZSPiC', videoId: 'vXtJkDHEAAc', title: 'Mix - Calle 13', author: 'Calle 13 and more', count: null}
+    ])
+  })
+
+  it('skips lockups that are not playlists or lack a valid list or first video', async () => {
+    const results = await searchPlaylists(
+      'x',
+      respond(
+        200,
+        page([
+          playlist('PLchannel00000000', 'vXtJkDHEAAc', 'Not a list', 'X', '3 videos', 'LOCKUP_CONTENT_TYPE_VIDEO'),
+          playlist('bad', 'vXtJkDHEAAc', 'Short id', 'X', '3 videos'),
+          playlist('PLnovideo00000000', 'nope', 'No first video', 'X', '3 videos'),
+          video('TmKh7lAwnBI', 'A video', 'Band', '3:00'),
+          playlist('PLgood00000000000', 'TmKh7lAwnBI', 'Good', 'X', '3 videos')
+        ])
+      )
+    )
+    expect(results.map(r => r.listId)).toEqual(['PLgood00000000000'])
+  })
+})
+
+describe('search (videos and playlists together)', () => {
+  const videos = Array.from({length: SEARCH_LIMIT}, (_, i) => video(`video${String(i).padStart(6, '0')}`, `Song ${i}`, 'Band', '1:00'))
+  const lists = Array.from({length: 5}, (_, i) => playlist(`PLlist${String(i).padStart(11, '0')}`, 'TmKh7lAwnBI', `List ${i}`, 'X', '9 videos'))
+  const byFilter = (videoPage: () => string, listPage: () => string): HttpGet => async (_url, init) => {
+    const params = (JSON.parse(init?.body ?? '{}') as {params?: string}).params
+    return {ok: true, status: 200, text: async () => (params === 'EgIQAw%3D%3D' ? listPage() : videoPage())}
+  }
+  const shape = (results: Awaited<ReturnType<typeof search>>): string =>
+    results.map(r => (r.kind === 'video' ? 'v' : 'P')).join('')
+
+  it('mixes up to three playlists among the videos', async () => {
+    const results = await search('x', byFilter(() => page(videos), () => page(lists)))
+    expect(shape(results)).toBe('vvPvvvPvvvPvv')
+    expect(results.filter(r => r.kind === 'playlist').map(r => r.title)).toEqual(['List 0', 'List 1', 'List 2'])
+  })
+
+  it('puts the playlists after the videos when there are few videos', async () => {
+    expect(shape(await search('x', byFilter(() => page(videos.slice(0, 1)), () => page(lists.slice(0, 2)))))).toBe('vPP')
+  })
+
+  it('still shows the videos when the playlist search fails', async () => {
+    const results = await search(
+      'x',
+      byFilter(
+        () => page(videos.slice(0, 2)),
+        () => '{}'
+      )
+    )
+    expect(shape(results)).toBe('vv')
+  })
+
+  it('fails as before when the video search fails', async () => {
+    expect(await codeOf(search('x', byFilter(() => '{}', () => page(lists))))).toBe('search-unavailable')
   })
 })

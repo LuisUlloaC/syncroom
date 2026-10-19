@@ -222,6 +222,14 @@ button.link:hover:not(:disabled) { background: none; color: var(--vscode-textLin
 .results li:hover, .results li:focus-within { background: var(--vscode-list-hoverBackground); }
 .results img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 0.2rem; background: var(--vscode-input-background); }
 .results li.added img { opacity: 0.55; }
+.results .thumb { position: relative; display: block; }
+.results .thumb img { display: block; }
+/* Insignia de lista sobre la miniatura, como en YouTube: icono y número de vídeos. */
+.results .count {
+  position: absolute; right: 0.15rem; bottom: 0.15rem; display: flex; align-items: center; gap: 0.2em;
+  padding: 0 0.3em; border-radius: 0.2rem; font-size: 0.8em; line-height: 1.5; font-variant-numeric: tabular-nums;
+  background: rgb(0 0 0 / 0.78); color: #fff;
+}
 .results .info { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 0.1rem; }
 .results .t {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;

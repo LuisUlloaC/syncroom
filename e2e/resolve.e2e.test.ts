@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest'
 import {PLAYLIST_LIMIT, resolveLink} from '../src/resolve/youtube'
-import {SEARCH_LIMIT, searchVideos} from '../src/resolve/search'
+import {SEARCH_LIMIT, search, searchVideos} from '../src/resolve/search'
 
 describe('resolve against the real YouTube', () => {
   it('resolves a video through oEmbed', async () => {
@@ -53,5 +53,18 @@ describe('search against the real YouTube', () => {
   it('marks live streams with no duration', async () => {
     const results = await searchVideos('lofi hip hop radio live')
     expect(results.some(result => result.duration === null)).toBe(true)
+  })
+
+  it('mixes playlists among the videos, and a found playlist resolves', async () => {
+    const results = await search('calle 13')
+    const playlists = results.filter(result => result.kind === 'playlist')
+    expect(results.filter(result => result.kind === 'video').length).toBeGreaterThan(3)
+    expect(playlists.length).toBeGreaterThan(0)
+    const first = playlists[0]
+    if (first?.kind !== 'playlist') throw new Error('no playlist')
+    expect(first.title).not.toBe('')
+    const resolved = await resolveLink(`https://www.youtube.com/watch?v=${first.videoId}&list=${first.listId}`)
+    expect(resolved.metas.length).toBeGreaterThan(1)
+    expect(resolved.metas[resolved.startIndex]?.videoId).toBe(first.videoId)
   })
 })

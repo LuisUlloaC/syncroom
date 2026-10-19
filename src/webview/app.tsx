@@ -390,6 +390,9 @@ function Scrubber({position, duration, disabled}: {position: number; duration: n
   )
 }
 
+/** Un vídeo y una lista que empieza por él son resultados distintos. */
+const resultKey = (result: SearchResult): string => (result.kind === 'video' ? result.videoId : `list:${result.listId}`)
+
 type SearchState =
   | {status: 'closed'}
   | {status: 'searching'; id: number}
@@ -419,9 +422,11 @@ function AddBox({disabled}: {disabled: boolean}) {
     lastId.current += 1
     setSearch({status: 'closed'})
   }
-  const addVideo = (videoId: string, next: boolean): void => {
-    post({t: 'add', url: `https://youtu.be/${videoId}`, next})
-    setAdded(current => new Set(current).add(videoId))
+  const add = (result: SearchResult, next: boolean): void => {
+    // Una lista entra por el mismo camino que su enlace pegado: empieza por su primer vídeo.
+    const url = result.kind === 'video' ? `https://youtu.be/${result.videoId}` : `https://www.youtube.com/watch?v=${result.videoId}&list=${result.listId}`
+    post({t: 'add', url, next})
+    setAdded(current => new Set(current).add(resultKey(result)))
   }
 
   return (
@@ -481,24 +486,40 @@ function AddBox({disabled}: {disabled: boolean}) {
           {search.status === 'done' && search.results.length > 0 && (
             <ol>
               {search.results.map(result => {
-                const done = added.has(result.videoId)
+                const key = resultKey(result)
+                const done = added.has(key)
+                const addLabel = done ? s('search.added') : result.kind === 'playlist' ? s('search.addPlaylist') : s('search.add')
                 return (
-                  <li key={result.videoId} class={done ? 'added' : undefined}>
-                    <img src={thumbnail(result.videoId)} alt="" loading="lazy" />
+                  <li key={key} class={done ? 'added' : undefined}>
+                    <span class="thumb">
+                      <img src={thumbnail(result.videoId)} alt="" loading="lazy" />
+                      {result.kind === 'playlist' && (
+                        <span class="count">
+                          <Icon name="playlist" />
+                          {result.count !== null && result.count}
+                        </span>
+                      )}
+                    </span>
                     <span class="info">
                       <span class="t" title={result.title}>
                         {result.title}
                       </span>
                       <span class="m">
                         {result.author !== '' && <span class="who">{result.author}</span>}
-                        {result.duration === null ? <span class="live">{s('search.live')}</span> : <span class="dur">{result.duration}</span>}
+                        {result.kind === 'playlist' ? (
+                          <span class="dur">{s('search.playlist')}</span>
+                        ) : result.duration === null ? (
+                          <span class="live">{s('search.live')}</span>
+                        ) : (
+                          <span class="dur">{result.duration}</span>
+                        )}
                       </span>
                     </span>
                     <span class="tools">
                       <button
                         class="icon"
                         disabled={disabled}
-                        onClick={() => addVideo(result.videoId, true)}
+                        onClick={() => add(result, true)}
                         title={s('queue.playNext')}
                         aria-label={s('queue.playNext')}
                       >
@@ -507,9 +528,9 @@ function AddBox({disabled}: {disabled: boolean}) {
                       <button
                         class={done ? 'icon on' : 'icon'}
                         disabled={disabled}
-                        onClick={() => addVideo(result.videoId, false)}
-                        title={done ? s('search.added') : s('search.add')}
-                        aria-label={done ? s('search.added') : s('search.add')}
+                        onClick={() => add(result, false)}
+                        title={addLabel}
+                        aria-label={addLabel}
                       >
                         <Icon name={done ? 'check' : 'plus'} />
                       </button>

@@ -66,6 +66,8 @@ export function webviewStrings(): Record<string, string> {
     'search.live': t('LIVE'),
     'search.add': t('Add to queue'),
     'search.added': t('Added — add again'),
+    'search.playlist': t('Playlist'),
+    'search.addPlaylist': t('Add the whole playlist to the queue'),
     'queue.title': t('Queue'),
     'queue.empty': t('The queue is empty.'),
     'queue.playNow': t('Play now'),
